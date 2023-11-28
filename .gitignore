@@ -2,4 +2,5 @@
 *.jl.cov
 *.jl.mem
 *.jld2
+*.mov
 /Manifest.toml
