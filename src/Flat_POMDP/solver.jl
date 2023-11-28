@@ -133,10 +133,13 @@ function train(pomdp::FlatPOMDP)
     for epoch in 1:EPOCHS
         @info "Training, epoch $(epoch) / $(EPOCHS)"
         Flux.train!(loss, model, zip(trainX, trainY), opt_state)
+        if WRITE_MODEL
+            jldsave("figup-nov28-e$(epoch).jld2"; model_state=Flux.state(model))
+        end
 
         ## Show loss-per-character over the test set
-        @show sum(loss.(Ref(model), testX, testY)) /
-            (SEQUENCES_PER_BATCH * STEPS_PER_SEQUENCE * length(testX))
+        # @show sum(loss.(Ref(model), testX, testY)) /
+        #     (SEQUENCES_PER_BATCH * STEPS_PER_SEQUENCE * length(testX))
     end
     return model
 end
