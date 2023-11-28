@@ -192,7 +192,7 @@ function real_occupancy(s::FlatState)
         y_bin = ceil(
             Int64, (target.y - XY_MIN_METERS) / (XY_MAX_METERS - XY_MIN_METERS) * XY_BINS
         )
-        if 0 >= x_bin >= XY_BINS && 0 >= y_bin >= XY_BINS
+        if 0 <= x_bin <= XY_BINS && 0 <= y_bin <= XY_BINS
             occupancy[x_bin, y_bin] = 1
         end
     end
