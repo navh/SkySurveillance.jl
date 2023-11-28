@@ -192,11 +192,11 @@ function real_occupancy(s::FlatState)
         y_bin = ceil(
             Int64, (target.y - XY_MIN_METERS) / (XY_MAX_METERS - XY_MIN_METERS) * XY_BINS
         )
-        if 0 <= x_bin <= XY_BINS && 0 <= y_bin <= XY_BINS
+        if 0 < x_bin <= XY_BINS && 0 < y_bin <= XY_BINS
             occupancy[x_bin, y_bin] = 1
         end
     end
-    return SVector{length(Cells),Float64}(occupancy) #Hack to make it play nice with the model
+    return SVector{length(Cells),Float32}(occupancy) #Hack to make it play nice with the model
 end
 
 function target_observation(target)

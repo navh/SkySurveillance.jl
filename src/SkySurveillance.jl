@@ -32,8 +32,8 @@ WRITE_MODEL::Bool = true
 LEARNING_RATE::Float64 = 1e-2
 STEPS_PER_SEQUENCE::Int = 500
 TRAIN_SEQUENCES::Int = 500
-TEST_SEQUENCES::Int = 5 # roughly 0.05 of train
-EPOCHS::Int = 200
+TEST_SEQUENCES::Int = 50 # roughly 0.05 of train
+EPOCHS::Int = 5
 USE_GPU::Bool = false
 
 # initialize the problem

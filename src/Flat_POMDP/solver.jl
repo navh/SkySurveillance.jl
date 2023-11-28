@@ -111,6 +111,11 @@ end
 function train(pomdp::FlatPOMDP)
     device = USE_GPU ? gpu : cpu
     @info "Beginning training on $(device)"
+    @info "LEARNING_RATE = $LEARNING_RATE"
+    @info "STEPS_PER_SEQUENCE = $STEPS_PER_SEQUENCE"
+    @info "TRAIN_SEQUENCES = $TRAIN_SEQUENCES"
+    @info "TEST_SEQUENCES = $TEST_SEQUENCES"
+    @info "EPOCHS= $EPOCHS"
 
     ## Get Data
     @info "Get Data"
@@ -137,9 +142,8 @@ function train(pomdp::FlatPOMDP)
             jldsave("figup-nov28-e$(epoch).jld2"; model_state=Flux.state(model))
         end
 
-        ## Show loss-per-character over the test set
-        # @show sum(loss.(Ref(model), testX, testY)) /
-        #     (SEQUENCES_PER_BATCH * STEPS_PER_SEQUENCE * length(testX))
+        ## Show loss-per-step over the test set
+        @info "loss-per-step $(sum(loss.(Ref(model), testX, testY)) / (STEPS_PER_SEQUENCE * length(testX)))"
     end
     return model
 end
