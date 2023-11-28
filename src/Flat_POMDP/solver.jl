@@ -7,19 +7,38 @@ function POMDPs.solve(::FigOfflineSolver, pomdp::POMDP)
     #TODO: train RNN+decoder here?
     figup = train(pomdp)
     figup_state = Flux.state(figup)
-    jldsave("./figup4.jld2"; figup_state)
-
-    return RandomPolicy(pomdp.rng, pomdp, figup)
+    jldsave("./figup5.jld2"; figup_state)
+    #figup = load_model("figup4.jld2")
+    #
+    up = FigUpdater(figup)
+    return RandomPolicy(pomdp.rng, pomdp, up)
 end
 
-struct FigUpdater <: POMDPs.Updater end
+struct FigUpdater <: POMDPs.Updater
+    model
+end
 
 function POMDPs.initialize_belief(up::FigUpdater, d)
-    # load saved model?
+    Flux.reset!(up.model)
+    return zeros(Cells)
 end
 
 function POMDPs.update(up::FigUpdater, b, a, o)
-    #call rnn
+    if isempty(o)
+        return Cells(up.model(SVector{5,Float32}(a, 0.0, 0.0, 0.0, 0.0)))
+    end
+    guesses = [
+        up.model(
+            SVector{5,Float32}(
+                a,
+                1.0,
+                target.r / RADAR_MAX_RANGE_METERS,
+                target.θ / π,
+                target.v / √(2 * TARGET_VELOCITY_MAX_METERS_PER_SECOND^2),
+            ), # The second 1.0 represents that a measurement has been made
+        ) for target in o
+    ]
+    return Cells(last(guesses))
 end
 
 ### nets.jl copy paste below
@@ -28,6 +47,14 @@ end
 function build_model(input_width::Int, output_width::Int)
     h = 128
     return Chain(LSTM(input_width => h), LSTM(h => h), Dense(h => output_width))
+end
+
+function load_model(filename)
+    device = USE_GPU ? gpu : cpu
+    model = device(build_model(5, length(Cells)))
+    model_state = load(filename)
+    Flux.loadmodel!(model, model_state)
+    return model_state
 end
 
 # TODO: can this be done on the fly? Flux's docs don't make it obvious... this feels foolish
