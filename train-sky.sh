@@ -5,10 +5,10 @@
 
 #SBATCH --nodes 1
 #SBATCH --tasks-per-node=1
-#SBATCH --cpus-per-task=2 
+#SBATCH --cpus-per-task=4
 #SBATCH --gres=gpu:1 # Remove this line to run using CPU only
 
-#SBATCH --mem=16G
+#SBATCH --mem=24G
 #SBATCH --time=02:34:56
 #SBATCH --output=t-stdenv23-julia19-%N-%j.out
 
