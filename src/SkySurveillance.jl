@@ -46,13 +46,12 @@ policy = solve(solver, pomdp)
 # for step in eachstep(history)
 #     #@show step.b
 # end
-
-anim = @animate for step in stepthrough(pomdp, policy; max_steps=1000)
-    if PARAMS["render"]
+if PARAMS["render"]
+    anim = @animate for step in stepthrough(pomdp, policy; max_steps=1000)
         POMDPTools.render(pomdp, step)
     end
+    mov(anim, "./test2.mov"; loop=1)
 end
-mov(anim, "./test2.mov"; loop=1)
 #
 # solver = QMDPSolver() # From QMDP
 #

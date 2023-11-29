@@ -7,7 +7,7 @@ function POMDPs.solve(::FigOfflineSolver, pomdp::POMDP)
     #TODO: train RNN+decoder here?
     figup = train(pomdp)
     figup_state = Flux.state(figup)
-    jldsave("./figup5.jld2"; figup_state)
+    jldsave("$(PARAMS["model_path"])-figup.jld2"; figup_state)
     #figup = load_model("figup4.jld2")
     #
     up = FigUpdater(figup)
@@ -139,7 +139,13 @@ function train(pomdp::FlatPOMDP)
         @info "Training, epoch $(epoch) / $(PARAMS["epochs"])"
         Flux.train!(loss, model, zip(trainX, trainY), opt_state)
         if PARAMS["write_model"]
-            jldsave("figup-nov28-e$(epoch).jld2"; model_state=Flux.state(model))
+            if PARAMS["use_gpu"]
+                cpu(model) # Dump it onto the CPU to save 
+            end
+            jldsave("$(PARAMS["model_path"])-$(epoch).jld2"; model_state=Flux.state(model))
+            if PARAMS["use_gpu"]
+                gpu(model)
+            end
         end
 
         ## Show loss-per-step over the test set
