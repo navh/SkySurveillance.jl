@@ -1,7 +1,8 @@
 module SkySurveillance
 
 using Distributions: Uniform
-using Flux: Adam, Chain, Dense, Flux, LSTM, batchseq, chunk, cpu, gpu, logitcrossentropy
+using Flux:
+    Adam, Chain, Dense, Flux, LSTM, batchseq, chunk, cpu, gpu, logitcrossentropy, mse
 using JLD2: jldsave, load
 using POMDPPolicies: RandomPolicy
 using POMDPTools:
@@ -19,26 +20,18 @@ using Parameters: @with_kw
 using Plots: @animate, Plots, Shape, heatmap!, mov, plot, plot!
 using Random: AbstractRNG, Xoshiro
 using StaticArrays: @SMatrix, @SVector, SA, SMatrix, SVector
+using TOML: TOML
+
+PARAMS = TOML.parsefile(ARGS[1])
+println("-------------------- begin params '$(ARGS[1])'")
+TOML.print(PARAMS)
+println("-------------------- end params '$(ARGS[1])'")
 
 include("Flat_POMDP/flat_pomdp.jl")
 include("Flat_POMDP/solver.jl")
 include("Flat_POMDP/visualizations.jl")
 
-SEED::Int64 = 42
-RENDER::Bool = true
-WRITE_MODEL::Bool = true
-
-# Solver Hyperparams
-LEARNING_RATE::Float64 = 1e-2
-STEPS_PER_SEQUENCE::Int = 500
-TRAIN_SEQUENCES::Int = 500
-TEST_SEQUENCES::Int = 50 # roughly 0.05 of train
-EPOCHS::Int = 5
-USE_GPU::Bool = false
-
-# initialize the problem
-
-rng = Xoshiro(SEED)
+rng = Xoshiro(PARAMS["seed"])
 
 pomdp = FlatPOMDP(; rng=rng)
 
@@ -55,7 +48,7 @@ policy = solve(solver, pomdp)
 # end
 
 anim = @animate for step in stepthrough(pomdp, policy; max_steps=1000)
-    if RENDER
+    if PARAMS["render"]
         POMDPTools.render(pomdp, step)
     end
 end

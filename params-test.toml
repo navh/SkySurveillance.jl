@@ -1,0 +1,30 @@
+# Testing putting all of the parameters in a file
+
+seed = 42
+write_model = true
+model_path = "./figup6"
+
+render = false
+video_path = "./test2"
+
+search_strategy = "random" # one of ["random","sweep"]
+
+train = true
+
+# Solving Parameters
+learning_rate = 1e-2
+steps_per_sequence = 500
+train_sequences = 500
+test_sequences = 50
+epochs = 5
+use_gpu = false
+
+
+# Modelling Parameters
+number_of_targets = 5
+beamwidth_degrees = 10
+radar_min_range_meters = 500
+radar_max_range_meters = 500_000
+xy_bins = 20
+dwell_time_seconds = 100e-3
+target_velocity_max_meters_per_second = 700

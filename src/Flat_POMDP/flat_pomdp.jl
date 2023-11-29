@@ -6,47 +6,40 @@ export FlatPOMDP, FlatState, FlatBelief
 # TODO: add beamwidth selection to action space
 # TODO: add target size to target attributes, use snr math to illuminate targets, 0.01m^3 bird to 500m^3 747
 
-NUMBER_OF_TARGETS = 5
+beamwidth_rad::Float32 = PARAMS["beamwidth_degrees"] * π / 360
 
-BEAMWIDTH = 10 * π / 360 # degree view as radians
+# RANGE_BINS = 30  # Ravi had mentioned seeing a 600 bin example # Range Cells
+# AZIMUTH_BINS = 30 #  some factors of 360 are 18, 20, 24, 30, 36, 40, 45, 60, 72, 90, 120, 180
 
-RADAR_MIN_RANGE_METERS = 500  # "black zone" based on pulse width, can't RX while TX
-RADAR_MAX_RANGE_METERS = 500_000  # up to 500km # based on height of radar/horizon
+# RANGE_SLICE_DEPTH = (PARAMS["radar_max_range_meters"] - PARAMS["radar_min_range_meters"]) / RANGE_BINS
+# AZIMUTH_SLICE_WIDTH = 2π / AZIMUTH_BINS
 
-RANGE_BINS = 30  # Ravi had mentioned seeing a 600 bin example # Range Cells
-AZIMUTH_BINS = 30 #  some factors of 360 are 18, 20, 24, 30, 36, 40, 45, 60, 72, 90, 120, 180
+XY_MAX_METERS::Float32 = PARAMS["radar_max_range_meters"]
+XY_MIN_METERS::Float32 = -1 * PARAMS["radar_max_range_meters"]
+XY_BIN_WIDTH::Float32 = (XY_MAX_METERS - XY_MIN_METERS) / PARAMS["xy_bins"]
 
-RANGE_SLICE_DEPTH = (RADAR_MAX_RANGE_METERS - RADAR_MIN_RANGE_METERS) / RANGE_BINS
-AZIMUTH_SLICE_WIDTH = 2π / AZIMUTH_BINS
-
-# no pizzaland
-XY_MAX_METERS = RADAR_MAX_RANGE_METERS
-XY_MIN_METERS = -1 * RADAR_MAX_RANGE_METERS
-XY_BINS = 20
-XY_BIN_WIDTH = (XY_MAX_METERS - XY_MIN_METERS) / XY_BINS
-
-DWELL_TIME_SECONDS = 100e-3  # ∈ [10ms,40ms] # from Jack
-TARGET_VELOCITY_MAX_METERS_PER_SECOND = 700  # rounded up F-22 top speed is 700m/s
+DWELL_TIME_SECONDS::Float32 = PARAMS["dwell_time_seconds"] # ∈ [10ms,40ms] # from Jack
+TARGET_VELOCITY_MAX_METERS_PER_SECOND::Float32 = PARAMS["target_velocity_max_meters_per_second"] # rounded up F-22 top speed is 700m/s
 
 #OBSERVATION_BUFFER_SIZE = 1000
 
-CellType = Float64
+CellType = Float32
 #Cells= SMatrix{RANGE_BINS,AZIMUTH_BINS,CellType}
-Cells = SMatrix{XY_BINS,XY_BINS,CellType}
+Cells = SMatrix{PARAMS["xy_bins"],PARAMS["xy_bins"],CellType}
 
 struct Target
-    x::Float64
-    y::Float64
-    x_velocity::Float64
-    y_velocity::Float64
-    t_since_observation::Float64 # Just for reward
+    x::Float32
+    y::Float32
+    x_velocity::Float32
+    y_velocity::Float32
+    t_since_observation::Float32 # Just for reward
 end
 
 struct FlatState
-    targets::SVector{NUMBER_OF_TARGETS,Target}
+    targets::SVector{PARAMS["number_of_targets"],Target}
 end
 
-function update_target(target::Target, time::Float64, observed::Bool)
+function update_target(target::Target, time::Float32, observed::Bool)
     return Target(
         target.x + target.x_velocity * time,
         target.y + target.y_velocity * time,
@@ -57,20 +50,20 @@ function update_target(target::Target, time::Float64, observed::Bool)
 end
 
 struct TargetObservation
-    r::Float64 # range (meters)
-    θ::Float64 # azimuth (radians)
-    v::Float64 # radial velocity (meters/second)
-    t::Float64 # time since observation
+    r::Float32 # range (meters)
+    θ::Float32 # azimuth (radians)
+    v::Float32 # radial velocity (meters/second)
+    t::Float32 # time since observation
 end
 
 FlatObservation = Vector{TargetObservation} # Ignore the below, I think this can just change in length 
-# FlatObservation = SVector{NUMBER_OF_TARGETS,TargetObservation}
+# FlatObservation = SVector{PARAMS["number_of_targets"],TargetObservation}
 # I don't think this reveals the total number of targets in any meaningful way
 # It ensures that on any observation I can *at least* fit them all
 
 FlatAction = Float64
 # To play nice with MCTS should I just pick wedges?
-# Eventually I'd like Tuple{Float64,Float64,Float64} # azimuth, beamwidth, dwell_time
+# Eventually I'd like Tuple{Float32,Float32,Float32} # azimuth, beamwidth, dwell_time
 # But I'm already having dimensionality nightmares, so this will have to do for now.
 
 struct FlatBelief
@@ -80,13 +73,13 @@ end
 
 @with_kw mutable struct FlatPOMDP <: POMDP{FlatState,FlatAction,FlatObservation} # POMDP{State, Action, Observation}
     rng::AbstractRNG
-    discount::Float64 = 0.95 # was 1.0
+    discount::Float32 = 0.95 # was 1.0
 end
 
 function POMDPs.isterminal(pomdp::FlatPOMDP, s::FlatState)
     # terminate early if no targets are in range
     for target in s.targets
-        if sqrt(target.x^2 + target.y^2) <= RADAR_MAX_RANGE_METERS
+        if sqrt(target.x^2 + target.y^2) <= PARAMS["radar_max_range_meters"]
             return false
         end
     end
@@ -116,25 +109,25 @@ end
 ### states
 
 function initialize_random_targets(rng::RNG)::FlatState where {RNG<:AbstractRNG}
-    xs = rand(rng, Uniform(XY_MIN_METERS, XY_MAX_METERS), NUMBER_OF_TARGETS)
-    ys = rand(rng, Uniform(XY_MIN_METERS, XY_MAX_METERS), NUMBER_OF_TARGETS)
+    xs = rand(rng, Uniform(XY_MIN_METERS, XY_MAX_METERS), PARAMS["number_of_targets"])
+    ys = rand(rng, Uniform(XY_MIN_METERS, XY_MAX_METERS), PARAMS["number_of_targets"])
     x_velocities = rand(
         rng,
         Uniform(
             -TARGET_VELOCITY_MAX_METERS_PER_SECOND, TARGET_VELOCITY_MAX_METERS_PER_SECOND
         ),
-        NUMBER_OF_TARGETS,
+        PARAMS["number_of_targets"],
     )
     y_velocities = rand(
         rng,
         Uniform(
             -TARGET_VELOCITY_MAX_METERS_PER_SECOND, TARGET_VELOCITY_MAX_METERS_PER_SECOND
         ),
-        NUMBER_OF_TARGETS,
+        PARAMS["number_of_targets"],
     )
     initial_targets = [
         Target(xs[i], ys[i], x_velocities[i], y_velocities[i], 0) for
-        i in 1:NUMBER_OF_TARGETS
+        i in 1:PARAMS["number_of_targets"]
     ]
     return FlatState(initial_targets)
 end
@@ -148,7 +141,7 @@ end
 ### actions 
 
 function POMDPs.actions(pomdp::FlatPOMDP)
-    return Uniform(0, 1) # This feels wrong... I guess it's used for sampling?
+    return Uniform{Float32}(0, 1) # This feels wrong... I guess it's used for sampling?
 end
 
 """
@@ -171,7 +164,7 @@ function action_to_rad(action::FlatAction)
     return action * 2π - π # atan returns ∈ [-π,π], so lets just play nice
 end
 
-function target_spotted(target::Target, action::FlatAction, beamwidth::Float64)
+function target_spotted(target::Target, action::FlatAction, beamwidth::Float32)
     target_θ = atan(target.y, target.x)
     # TODO: check this
     # (0.530473384623918, Main.SkySurveillance.TargetObservation[Main.SkySurveillance.TargetObservation(336190.8852956795, -2.998197791214231, -25.437627674086766, 0.0)])
@@ -184,15 +177,19 @@ end
 
 function real_occupancy(s::FlatState)
     #occupancy = zeros(Cells)
-    occupancy = zeros(CellType, XY_BINS, XY_BINS)
+    occupancy = zeros(CellType, PARAMS["xy_bins"], PARAMS["xy_bins"])
     for target in s.targets
         x_bin = ceil(
-            Int64, (target.x - XY_MIN_METERS) / (XY_MAX_METERS - XY_MIN_METERS) * XY_BINS
+            Int64,
+            (target.x - XY_MIN_METERS) / (XY_MAX_METERS - XY_MIN_METERS) *
+            PARAMS["xy_bins"],
         )
         y_bin = ceil(
-            Int64, (target.y - XY_MIN_METERS) / (XY_MAX_METERS - XY_MIN_METERS) * XY_BINS
+            Int64,
+            (target.y - XY_MIN_METERS) / (XY_MAX_METERS - XY_MIN_METERS) *
+            PARAMS["xy_bins"],
         )
-        if 0 < x_bin <= XY_BINS && 0 < y_bin <= XY_BINS
+        if 0 < x_bin <= PARAMS["xy_bins"] && 0 < y_bin <= PARAMS["xy_bins"]
             occupancy[x_bin, y_bin] = 1
         end
     end
@@ -232,7 +229,7 @@ function illumination_observation(action::FlatAction, state::FlatState)
     observations = TargetObservation[]
 
     for target in state.targets
-        if target_spotted(target, action, BEAMWIDTH)
+        if target_spotted(target, action, beamwidth_rad)
             push!(observations, target_observation(target))
         end
     end
@@ -268,7 +265,7 @@ function generate_s(
     if isterminal(pomdp, s)
         return s
     end
-    new_targets = SVector{NUMBER_OF_TARGETS,Target}([
+    new_targets = SVector{PARAMS["number_of_targets"],Target}([
         update_target(target, DWELL_TIME_SECONDS) for target in s.targets
     ])
     return FlatState(new_targets)

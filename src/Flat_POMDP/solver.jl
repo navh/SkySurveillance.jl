@@ -32,7 +32,7 @@ function POMDPs.update(up::FigUpdater, b, a, o)
             SVector{5,Float32}(
                 a,
                 1.0,
-                target.r / RADAR_MAX_RANGE_METERS,
+                target.r / PARAMS["radar_max_range_meters"],
                 target.θ / π,
                 target.v / √(2 * TARGET_VELOCITY_MAX_METERS_PER_SECOND^2),
             ), # The second 1.0 represents that a measurement has been made
@@ -50,7 +50,7 @@ function build_model(input_width::Int, output_width::Int)
 end
 
 function load_model(filename)
-    device = USE_GPU ? gpu : cpu
+    device = PARAMS["use_gpu"] ? gpu : cpu
     model = device(build_model(5, length(Cells)))
     model_state = load(filename)
     Flux.loadmodel!(model, model_state)
@@ -59,20 +59,20 @@ end
 
 # TODO: can this be done on the fly? Flux's docs don't make it obvious... this feels foolish
 function get_data(pomdp::FlatPOMDP)
-    @info "Generating $(TRAIN_SEQUENCES) train sequences and $(TEST_SEQUENCES) test sequences."
+    @info "Generating $(PARAMS["train_sequences"]) train sequences and $(PARAMS["test_sequences"]) test sequences."
     Xs = []
     Ys = []
 
-    for sequence_number in 1:(TRAIN_SEQUENCES + TEST_SEQUENCES)
+    for sequence_number in 1:(PARAMS["train_sequences"] + PARAMS["test_sequences"])
         # TODO: check rng, 'split' the RNG like JAX? does it do this automagically?
-        rng = Xoshiro(SEED + sequence_number)
+        rng = Xoshiro(PARAMS["seed"] + sequence_number)
 
         pomdp = FlatPOMDP(; rng=rng)
 
         solver = RandomSolver(rng)
         policy = solve(solver, pomdp)
 
-        hr = HistoryRecorder(; max_steps=STEPS_PER_SEQUENCE)
+        hr = HistoryRecorder(; max_steps=PARAMS["steps_per_sequence"])
         history = simulate(hr, pomdp, policy)
         X = []
         Y = []
@@ -89,7 +89,7 @@ function get_data(pomdp::FlatPOMDP)
                         SVector{5,Float32}(
                             a,
                             1.0,
-                            target.r / RADAR_MAX_RANGE_METERS,
+                            target.r / PARAMS["radar_max_range_meters"],
                             target.θ / π,
                             target.v / √(2 * TARGET_VELOCITY_MAX_METERS_PER_SECOND^2),
                         ), # The second 1.0 represents that a measurement has been made
@@ -101,21 +101,16 @@ function get_data(pomdp::FlatPOMDP)
         push!(Ys, Y)
     end
     return (
-        Xs[1:TRAIN_SEQUENCES],
-        Ys[1:TRAIN_SEQUENCES],
-        Xs[(TRAIN_SEQUENCES + 1):end],
-        Ys[(TRAIN_SEQUENCES + 1):end],
+        Xs[1:PARAMS["train_sequences"]],
+        Ys[1:PARAMS["train_sequences"]],
+        Xs[(PARAMS["train_sequences"] + 1):end],
+        Ys[(PARAMS["train_sequences"] + 1):end],
     )
 end
 
 function train(pomdp::FlatPOMDP)
-    device = USE_GPU ? gpu : cpu
+    device = PARAMS["use_gpu"] ? gpu : cpu
     @info "Beginning training on $(device)"
-    @info "LEARNING_RATE = $LEARNING_RATE"
-    @info "STEPS_PER_SEQUENCE = $STEPS_PER_SEQUENCE"
-    @info "TRAIN_SEQUENCES = $TRAIN_SEQUENCES"
-    @info "TEST_SEQUENCES = $TEST_SEQUENCES"
-    @info "EPOCHS= $EPOCHS"
 
     ## Get Data
     @info "Get Data"
@@ -127,23 +122,28 @@ function train(pomdp::FlatPOMDP)
     @info "Constructing Model"
     model = device(build_model(length(trainX[1][1]), length(Cells)))
 
+    # function loss(m, xs, ys)
+    #     Flux.reset!(m)
+    #     return sum(logitcrossentropy.([m(x) for x in xs], ys))
+    # end
+
     function loss(m, xs, ys)
         Flux.reset!(m)
-        return sum(logitcrossentropy.([m(x) for x in xs], ys))
+        return sum(mse.([m(x) for x in xs], ys, agg=sum))
     end
 
     ## Training
-    opt_state = Flux.setup(Adam(LEARNING_RATE), model)
+    opt_state = Flux.setup(Adam(PARAMS["learning_rate"]), model)
 
-    for epoch in 1:EPOCHS
-        @info "Training, epoch $(epoch) / $(EPOCHS)"
+    for epoch in 1:PARAMS["epochs"]
+        @info "Training, epoch $(epoch) / $(PARAMS["epochs"])"
         Flux.train!(loss, model, zip(trainX, trainY), opt_state)
-        if WRITE_MODEL
+        if PARAMS["write_model"]
             jldsave("figup-nov28-e$(epoch).jld2"; model_state=Flux.state(model))
         end
 
         ## Show loss-per-step over the test set
-        @info "loss-per-step $(sum(loss.(Ref(model), testX, testY)) / (STEPS_PER_SEQUENCE * length(testX)))"
+        @info "loss-per-step $(sum(loss.(Ref(model), testX, testY)) / (PARAMS["steps_per_sequence"] * length(testX)))"
     end
     return model
 end

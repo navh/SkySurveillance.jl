@@ -13,13 +13,14 @@ function POMDPTools.render(pomdp::FlatPOMDP, step)
     )
 
     #heatmap!(step.b; clims=(0.0, 1.0))
-    xyticks = XY_MIN_METERS:((XY_MAX_METERS - XY_MIN_METERS) / XY_BINS):XY_MAX_METERS
+    xyticks =
+        XY_MIN_METERS:((XY_MAX_METERS - XY_MIN_METERS) / PARAMS["xy_bins"]):XY_MAX_METERS
     heatmap!(xyticks, xyticks, step.b; clims=(0.0, 1.0), c=:binary)
 
     # Draw visible circle
     plot!(
         plt,
-        circleShape(0, 0, RADAR_MAX_RANGE_METERS);
+        circleShape(0, 0, PARAMS["radar_max_range_meters"]);
         seriestype=[:shape],
         lw=0.5,
         color=:black,
@@ -30,14 +31,14 @@ function POMDPTools.render(pomdp::FlatPOMDP, step)
     )
 
     # Draw action beam
-    left = action_to_rad(step.a) - BEAMWIDTH
-    right = action_to_rad(step.a) + BEAMWIDTH
+    left = action_to_rad(step.a) - beamwidth_rad
+    right = action_to_rad(step.a) + beamwidth_rad
     beam = Shape(
         [
             (0.0, 0.0)
-            Plots.partialcircle(left, right, 100, RADAR_MAX_RANGE_METERS)
+            Plots.partialcircle(left, right, 100, PARAMS["radar_max_range_meters"])
             (0.0, 0.0)
-        ]
+        ],
     )
     plot!(plt, beam; fillcolor=:red, fillalpha=0.5)
 

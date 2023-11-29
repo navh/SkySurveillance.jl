@@ -18,3 +18,5 @@ module load cuda # Remove this line if not using a GPU
 
 module load julia/1.9
 module lead nvptx-tools
+
+julia src/SkySurveillance.jl params-test.toml
