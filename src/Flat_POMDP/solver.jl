@@ -45,7 +45,7 @@ end
 
 # based on https://github.com/FluxML/model-zoo/blob/master/text/char-rnn/char-rnn.jl
 function build_model(input_width::Int, output_width::Int)
-    h = 128
+    h = 256
     return Chain(LSTM(input_width => h), LSTM(h => h), Dense(h => output_width))
 end
 

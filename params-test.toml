@@ -2,10 +2,10 @@
 
 seed = 42
 write_model = true
-model_path = "~/projects/def-rsadve/amoshebb/tests/figup8"
+model_path = "./models/figup8"
 
 render = false
-video_path = "~/projects/def-rsadve/amoshebb/tests/test8"
+video_path = "./animations/test8"
 
 search_strategy = "random" # one of ["random","sweep"]
 
