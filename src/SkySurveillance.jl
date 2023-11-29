@@ -1,5 +1,6 @@
 module SkySurveillance
 
+using CUDA
 using Distributions: Uniform
 using Flux:
     Adam, Chain, Dense, Flux, LSTM, batchseq, chunk, cpu, gpu, logitcrossentropy, mse
