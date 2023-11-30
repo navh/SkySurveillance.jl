@@ -165,6 +165,9 @@ function action_to_rad(action::FlatAction)
 end
 
 function target_spotted(target::Target, action::FlatAction, beamwidth::Float32)
+    if √(target.x^2 + target.y^2) > PARAMS["radar_max_range_meters"]
+        return false
+    end
     target_θ = atan(target.y, target.x)
     # TODO: check this
     # (0.530473384623918, Main.SkySurveillance.TargetObservation[Main.SkySurveillance.TargetObservation(336190.8852956795, -2.998197791214231, -25.437627674086766, 0.0)])
@@ -193,7 +196,8 @@ function real_occupancy(s::FlatState)
             occupancy[x_bin, y_bin] = 1
         end
     end
-    return SVector{length(Cells),Float32}(occupancy) #Hack to make it play nice with the model
+    return occupancy
+    # return SVector{length(Cells),Float32}(occupancy) #Hack to make it play nice with the model
 end
 
 function target_observation(target)

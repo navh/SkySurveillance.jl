@@ -1,9 +1,19 @@
 module SkySurveillance
 
-using CUDA
 using Distributions: Uniform
 using Flux:
-    Adam, Chain, Dense, Flux, LSTM, batchseq, chunk, cpu, gpu, logitcrossentropy, mse
+    Adam,
+    Chain,
+    DataLoader,
+    Dense,
+    Flux,
+    LSTM,
+    batchseq,
+    chunk,
+    cpu,
+    gpu,
+    logitcrossentropy,
+    mse
 using JLD2: jldsave, load
 using POMDPPolicies: RandomPolicy
 using POMDPTools:
@@ -28,6 +38,16 @@ println("-------------------- begin params '$(ARGS[1])'")
 TOML.print(PARAMS)
 println("-------------------- end params '$(ARGS[1])'")
 
+if PARAMS["use_gpu"]
+    if PARAMS["gpu_type"] == "CUDA"
+        using CUDA
+        CUDA.allowscalar(true)
+    elseif PARAMS["gpu_type"] == "Metal"
+        using Metal
+        Metal.allowscalar(true)
+    end
+end
+
 include("Flat_POMDP/flat_pomdp.jl")
 include("Flat_POMDP/solver.jl")
 include("Flat_POMDP/visualizations.jl")
@@ -51,9 +71,9 @@ if PARAMS["render"]
     anim = @animate for step in stepthrough(pomdp, policy; max_steps=1000)
         POMDPTools.render(pomdp, step)
     end
-    mov(anim, "./test2.mov"; loop=1)
+    mov(anim, "$(PARAMS["video_path"]).mov"; loop=1)
 end
-#
+
 # solver = QMDPSolver() # From QMDP
 #
 # policy = solve(solver, pomdp)

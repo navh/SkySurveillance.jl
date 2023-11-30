@@ -5,3 +5,4 @@
 *.mov
 .DS_Store
 /Manifest.toml
+LocalPreferences.toml

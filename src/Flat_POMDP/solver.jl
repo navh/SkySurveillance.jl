@@ -46,98 +46,111 @@ end
 # based on https://github.com/FluxML/model-zoo/blob/master/text/char-rnn/char-rnn.jl
 function build_model(input_width::Int, output_width::Int)
     h = 256
-    return Chain(LSTM(input_width => h), LSTM(h => h), Dense(h => output_width))
-end
-
-function load_model(filename)
-    device = PARAMS["use_gpu"] ? gpu : cpu
-    model = device(build_model(5, length(Cells)))
-    model_state = load(filename)
-    Flux.loadmodel!(model, model_state)
-    return model_state
+    return Chain(
+        LSTM(input_width => h), LSTM(h => h), Dense(h => h), Dense(h => output_width)
+    )
 end
 
 # TODO: can this be done on the fly? Flux's docs don't make it obvious... this feels foolish
-function get_data(pomdp::FlatPOMDP)
-    @info "Generating $(PARAMS["train_sequences"]) train sequences and $(PARAMS["test_sequences"]) test sequences."
-    Xs = []
-    Ys = []
+# Answer: Yes: data must support the 'getobs' method https://fluxml.ai/Flux.jl/stable/data/mlutils/#MLUtils.DataLoader
+function get_data(pomdp::FlatPOMDP, sequence_count::Int64, device)
+    @info "Generating $(sequence_count) sequences"
 
-    for sequence_number in 1:(PARAMS["train_sequences"] + PARAMS["test_sequences"])
+    data = []
+    # Ugh, ugly svector declarations to make it play nice with CUDA
+    x_type = SVector{5,Float32}
+    y_type = SVector{length(Cells),Float32} # Apparently large StaticArrays stresses the compiler and does more harm than good
+
+    #for sequence_number in 1:(PARAMS["train_sequences"] + PARAMS["test_sequences"])
+    for sequence_number in 1:sequence_count
         # TODO: check rng, 'split' the RNG like JAX? does it do this automagically?
         rng = Xoshiro(PARAMS["seed"] + sequence_number)
+        x = []
+        y = []
 
         pomdp = FlatPOMDP(; rng=rng)
 
         solver = RandomSolver(rng)
         policy = solve(solver, pomdp)
-
         hr = HistoryRecorder(; max_steps=PARAMS["steps_per_sequence"])
         history = simulate(hr, pomdp, policy)
-        X = []
-        Y = []
         for (s, a, o) in eachstep(history, "(s,a,o)")
             occupancy_matrix = real_occupancy(s)
             if isempty(o)
-                push!(Y, occupancy_matrix)
-                push!(X, SVector{5,Float32}(a, 0.0, 0.0, 0.0, 0.0))
+                push!(x, x_type(a, 0.0, 0.0, 0.0, 0.0))
+                push!(y, y_type(occupancy_matrix))
             else
                 for target in o
-                    push!(Y, occupancy_matrix)
                     push!(
-                        X,
-                        SVector{5,Float32}(
+                        x,
+                        x_type(
                             a,
                             1.0,
                             target.r / PARAMS["radar_max_range_meters"],
                             target.θ / π,
                             target.v / √(2 * TARGET_VELOCITY_MAX_METERS_PER_SECOND^2),
-                        ), # The second 1.0 represents that a measurement has been made
+                        ), # second 1.0 represents that a measurement has been made
                     )
+                    push!(y, y_type(occupancy_matrix))
                 end
             end
         end
-        push!(Xs, X)
-        push!(Ys, Y)
+        x = x[1:PARAMS["steps_per_sequence"]]
+        y = y[1:PARAMS["steps_per_sequence"]]
+        x = device(x)
+        y = device(y)
+        push!(data, (x, y))
     end
-    return (
-        Xs[1:PARAMS["train_sequences"]],
-        Ys[1:PARAMS["train_sequences"]],
-        Xs[(PARAMS["train_sequences"] + 1):end],
-        Ys[(PARAMS["train_sequences"] + 1):end],
-    )
+    #data = xy_tuple_type(data)
+    return device(data)
 end
 
 function train(pomdp::FlatPOMDP)
-    device = PARAMS["use_gpu"] ? gpu : cpu
+    device = if PARAMS["use_gpu"]
+        gpu
+    else
+        cpu
+    end
     @info "Beginning training on $(device)"
 
     ## Get Data
     @info "Get Data"
-    (trainX, trainY, testX, testY) = get_data(pomdp)
-
-    @info "Moving data to $(device)"
-    trainX, trainY, testX, testY = device.((trainX, trainY, testX, testY))
+    trainData = get_data(pomdp, PARAMS["train_sequences"], device)
+    testData = get_data(pomdp, PARAMS["test_sequences"], device)
 
     @info "Constructing Model"
-    model = device(build_model(length(trainX[1][1]), length(Cells)))
+    model = device(build_model(5, length(Cells)))
 
     # function loss(m, xs, ys)
     #     Flux.reset!(m)
     #     return sum(logitcrossentropy.([m(x) for x in xs], ys))
     # end
+    ZEST = PARAMS["xy_bins"]^2 / PARAMS["number_of_targets"]
 
     function loss(m, xs, ys)
         Flux.reset!(m)
-        return sum(mse.([m(x) for x in xs], ys, agg=sum))
+        return sum(mse.([m(x) * ZEST for x in xs], ys * ZEST)) / length(xs)
     end
 
     ## Training
     opt_state = Flux.setup(Adam(PARAMS["learning_rate"]), model)
 
+    train_loss_history = Float32[]
+    test_loss_history = Float32[]
+
     for epoch in 1:PARAMS["epochs"]
         @info "Training, epoch $(epoch) / $(PARAMS["epochs"])"
-        Flux.train!(loss, model, zip(trainX, trainY), opt_state)
+        Flux.train!(loss, model, trainData, opt_state)
+        train_loss =
+            sum(loss.(Ref(model), [x[1] for x in trainData], [x[2] for x in trainData])) / length(trainData)
+        push!(train_loss_history, train_loss)
+        @info "train_loss: $(train_loss)"
+
+        test_loss =
+            sum(loss.(Ref(model), [x[1] for x in testData], [x[2] for x in testData])) / length(testData)
+        push!(test_loss_history, test_loss)
+        @info "test_loss: $(test_loss)"
+
         if PARAMS["write_model"]
             if PARAMS["use_gpu"]
                 cpu(model) # Dump it onto the CPU to save 
@@ -149,7 +162,11 @@ function train(pomdp::FlatPOMDP)
         end
 
         ## Show loss-per-step over the test set
-        @info "loss-per-step $(sum(loss.(Ref(model), testX, testY)) / (PARAMS["steps_per_sequence"] * length(testX)))"
+        #@info "loss-per-step $(sum(loss.(Ref(model),[x[1] for x in testData],[x[2] for x in testData])) / PARAMS["test_sequences"]) "
     end
+    @info "train_loss_history"
+    @info train_loss_history
+    @info "test_loss_history"
+    @info test_loss_history
     return model
 end
