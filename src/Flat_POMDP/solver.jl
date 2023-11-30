@@ -47,7 +47,12 @@ end
 function build_model(input_width::Int, output_width::Int)
     h = 256
     return Chain(
-        LSTM(input_width => h), LSTM(h => h), Dense(h => h), Dense(h => output_width)
+        LSTM(input_width => h),
+        LSTM(h => h),
+        LSTM(h => h),
+        Dense(h => h), # TODO: consider relu?
+        Dense(h => h),
+        Dense(h => output_width),
     )
 end
 
