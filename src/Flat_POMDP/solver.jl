@@ -69,11 +69,11 @@ function get_data(pomdp::FlatPOMDP, sequence_count::Int64, device)
     #for sequence_number in 1:(PARAMS["train_sequences"] + PARAMS["test_sequences"])
     for sequence_number in 1:sequence_count
         # TODO: check rng, 'split' the RNG like JAX? does it do this automagically?
-        rng = Xoshiro(PARAMS["seed"] + sequence_number)
+        #rng = Xoshiro(PARAMS["seed"] + sequence_number)
         x = []
         y = []
 
-        pomdp = FlatPOMDP(; rng=rng)
+        pomdp = FlatPOMDP(; rng=pomdp.rng)
 
         solver = RandomSolver(rng)
         policy = solve(solver, pomdp)
@@ -85,6 +85,7 @@ function get_data(pomdp::FlatPOMDP, sequence_count::Int64, device)
                 push!(x, x_type(a, 0.0, 0.0, 0.0, 0.0))
                 push!(y, y_type(occupancy_matrix))
             else
+               ŷ
                 for target in o
                     push!(
                         x,
