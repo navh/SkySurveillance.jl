@@ -85,7 +85,6 @@ function get_data(pomdp::FlatPOMDP, sequence_count::Int64, device)
                 push!(x, x_type(a, 0.0, 0.0, 0.0, 0.0))
                 push!(y, y_type(occupancy_matrix))
             else
-               ŷ
                 for target in o
                     push!(
                         x,
@@ -132,10 +131,13 @@ function train(pomdp::FlatPOMDP)
     #     return sum(logitcrossentropy.([m(x) for x in xs], ys))
     # end
     ZEST = PARAMS["xy_bins"]^2 / PARAMS["number_of_targets"]
-
+    #
+    # function loss(m, xs, ys)
+    #     Flux.reset!(m)
+    #     return sum(mse.([m(x) * ZEST for x in xs], ys * ZEST)) / length(xs)
     function loss(m, xs, ys)
         Flux.reset!(m)
-        return sum(mse.([m(x) * ZEST for x in xs], ys * ZEST)) / length(xs)
+        return sum(mse.([m(x) for x in xs], ys, agg=sum))
     end
 
     ## Training

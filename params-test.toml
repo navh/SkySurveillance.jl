@@ -2,23 +2,23 @@
 
 seed = 42
 write_model = true
-model_path = "./models/figup10"
+model_path = "./models/figup13"
 
-render = false
-video_path = "./animations/test8"
+render = true
+video_path = "./animations/test13"
 
 search_strategy = "random" # one of ["random","sweep"]
 
 train = true
 
 # Solving Parameters
-learning_rate = 1e-2
-steps_per_sequence = 500
+learning_rate = 1e-3
+steps_per_sequence = 1000
 train_sequences = 500
-test_sequences = 50
-epochs = 50
+test_sequences = 20
+epochs = 100
 use_gpu = false
-gpu_type = "Metal"       # one of ["CUDA","Metal"]
+gpu_type = "Metal"        # one of ["CUDA","Metal"]
 
 
 # Modelling Parameters
