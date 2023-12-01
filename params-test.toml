@@ -16,7 +16,7 @@ learning_rate = 1e-2
 steps_per_sequence = 500
 train_sequences = 500
 test_sequences = 50
-epochs = 20
+epochs = 50
 use_gpu = false
 gpu_type = "Metal"       # one of ["CUDA","Metal"]
 
