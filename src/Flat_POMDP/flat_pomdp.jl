@@ -193,7 +193,7 @@ function real_occupancy(s::FlatState)
             PARAMS["xy_bins"],
         )
         if 0 < x_bin <= PARAMS["xy_bins"] && 0 < y_bin <= PARAMS["xy_bins"]
-            occupancy[x_bin, y_bin] = 1
+            occupancy[y_bin, x_bin] = 1
         end
     end
     return occupancy
