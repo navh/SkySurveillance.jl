@@ -12,10 +12,11 @@ function POMDPTools.render(pomdp::FlatPOMDP, step)
         xlims=(-XY_MAX_METERS, XY_MAX_METERS), ylims=(-XY_MAX_METERS, XY_MAX_METERS)
     )
 
-    #heatmap!(step.b; clims=(0.0, 1.0))
+    #fig = real_occupancy(step.s)
+    fig = step.b
     xyticks =
         XY_MIN_METERS:((XY_MAX_METERS - XY_MIN_METERS) / PARAMS["xy_bins"]):XY_MAX_METERS
-    heatmap!(xyticks, xyticks, step.b; clims=(0.0, 1.0), c=:binary)
+    heatmap!(xyticks, xyticks, fig; clims=(0.0, 1.0), c=:binary)
 
     # Draw visible circle
     plot!(
