@@ -28,11 +28,11 @@ CellType = Float32
 Cells = SMatrix{PARAMS["xy_bins"],PARAMS["xy_bins"],CellType}
 
 struct Target
+    id::Int32
     x::Float32
     y::Float32
     x_velocity::Float32
     y_velocity::Float32
-    t_since_observation::Float32 # Just for reward
 end
 
 struct FlatState
@@ -41,11 +41,11 @@ end
 
 function update_target(target::Target, time::Float32, observed::Bool)
     return Target(
+        target.id,
         target.x + target.x_velocity * time,
         target.y + target.y_velocity * time,
         target.x_velocity,
         target.y_velocity,
-        observed ? 0.0 : target.t_since_observation + time,
     )
 end
 
@@ -126,7 +126,7 @@ function initialize_random_targets(rng::RNG)::FlatState where {RNG<:AbstractRNG}
         PARAMS["number_of_targets"],
     )
     initial_targets = [
-        Target(xs[i], ys[i], x_velocities[i], y_velocities[i], 0) for
+        Target(i, xs[i], ys[i], x_velocities[i], y_velocities[i]) for
         i in 1:PARAMS["number_of_targets"]
     ]
     return FlatState(initial_targets)
@@ -179,7 +179,6 @@ function target_spotted(target::Target, action::FlatAction, beamwidth::Float32)
 end
 
 function real_occupancy(s::FlatState)
-    #occupancy = zeros(Cells)
     occupancy = zeros(CellType, PARAMS["xy_bins"], PARAMS["xy_bins"])
     for target in s.targets
         x_bin = ceil(
@@ -208,11 +207,10 @@ function target_observation(target)
     target_local_v = √(target.x_velocity^2 + target.y_velocity^2)
     # TODO: add diagram to README showing how observed_v math works
     observed_v = cos(target_local_θ - observed_θ) * target_local_v
-    t = 0.0
 
     # TODO: gaussian noise goes here
 
-    return TargetObservation(r, observed_θ, observed_v, t)
+    return TargetObservation(target.id, r, observed_θ, observed_v)
 end
 
 function illumination_observation(action::FlatAction, state::FlatState)
@@ -255,11 +253,11 @@ end
 
 function update_target(target::Target, time)
     return Target(
+        target.id,
         target.x + target.x_velocity * time,
         target.y + target.y_velocity * time,
         target.x_velocity,
         target.y_velocity,
-        target.t_since_observation + time,
     )
 end
 
@@ -274,12 +272,6 @@ function generate_s(
     ])
     return FlatState(new_targets)
 end
-
-# # Not totally sure why I had to define this when I'm using 'gen'...
-# # Turns out I do not
-# function POMDPs.transition(pomdp::FlatPOMDP, s::FlatState, a::FlatAction)
-#     return generate_s(pomdp, s, a, pomdp.rng)
-# end
 
 ### rewards 
 
