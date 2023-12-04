@@ -50,24 +50,19 @@ function update_target(target::Target, time::Float32, observed::Bool)
 end
 
 struct TargetObservation
+    id::Int32  # unique target id
     r::Float32 # range (meters)
     θ::Float32 # azimuth (radians)
     v::Float32 # radial velocity (meters/second)
-    t::Float32 # time since observation
 end
 
-FlatObservation = Vector{TargetObservation} # Ignore the below, I think this can just change in length 
-# FlatObservation = SVector{PARAMS["number_of_targets"],TargetObservation}
-# I don't think this reveals the total number of targets in any meaningful way
-# It ensures that on any observation I can *at least* fit them all
+FlatObservation = Vector{TargetObservation}
 
-FlatAction = Float64
+FlatAction = Float64 # Must be left 64 due to rand(uniform(f32,f32)) unwaveringly returning f64
 # To play nice with MCTS should I just pick wedges?
 # Eventually I'd like Tuple{Float32,Float32,Float32} # azimuth, beamwidth, dwell_time
-# But I'm already having dimensionality nightmares, so this will have to do for now.
 
 struct FlatBelief
-    #observations_buffer::SVector{OBSERVATION_BUFFER_SIZE,TargetObservation}
     occupancy_grid::Cells
 end
 
@@ -141,7 +136,7 @@ end
 ### actions 
 
 function POMDPs.actions(pomdp::FlatPOMDP)
-    return Uniform{Float32}(0, 1) # This feels wrong... I guess it's used for sampling?
+    return Uniform{Float32}(0, 1)
 end
 
 """
@@ -154,8 +149,6 @@ function POMDPs.action(p::RandomPolicy, b::FlatBelief)
     possible_actions = POMDPs.actions(p.problem, b)
     return rand(p.problem.pomdp.rng, possible_actions)
 end
-
-# POMDPs.actionindex(POMDP::FlatPOMDP, a::FlatAction) = a # Not discrete
 
 # observations 
 
@@ -178,26 +171,27 @@ function target_spotted(target::Target, action::FlatAction, beamwidth::Float32)
     return abs((target_θ - action_to_rad(action))) < beamwidth # TODO: tried to fix the 180 prob, unsure about new issues around 0-1 transition?
 end
 
-function real_occupancy(s::FlatState)
-    occupancy = zeros(CellType, PARAMS["xy_bins"], PARAMS["xy_bins"])
-    for target in s.targets
-        x_bin = ceil(
-            Int64,
-            (target.x - XY_MIN_METERS) / (XY_MAX_METERS - XY_MIN_METERS) *
-            PARAMS["xy_bins"],
-        )
-        y_bin = ceil(
-            Int64,
-            (target.y - XY_MIN_METERS) / (XY_MAX_METERS - XY_MIN_METERS) *
-            PARAMS["xy_bins"],
-        )
-        if 0 < x_bin <= PARAMS["xy_bins"] && 0 < y_bin <= PARAMS["xy_bins"]
-            occupancy[y_bin, x_bin] = 1
-        end
-    end
-    return occupancy
-    # return SVector{length(Cells),Float32}(occupancy) #Hack to make it play nice with the model
-end
+# TODO: delete the following
+# function real_occupancy(s::FlatState)
+#     occupancy = zeros(CellType, PARAMS["xy_bins"], PARAMS["xy_bins"])
+#     for target in s.targets
+#         x_bin = ceil(
+#             Int64,
+#             (target.x - XY_MIN_METERS) / (XY_MAX_METERS - XY_MIN_METERS) *
+#             PARAMS["xy_bins"],
+#         )
+#         y_bin = ceil(
+#             Int64,
+#             (target.y - XY_MIN_METERS) / (XY_MAX_METERS - XY_MIN_METERS) *
+#             PARAMS["xy_bins"],
+#         )
+#         if 0 < x_bin <= PARAMS["xy_bins"] && 0 < y_bin <= PARAMS["xy_bins"]
+#             occupancy[y_bin, x_bin] = 1
+#         end
+#     end
+#     return occupancy
+#     # return SVector{length(Cells),Float32}(occupancy) #Hack to make it play nice with the model
+# end
 
 function target_observation(target)
     # Sensor is at origin so this is all quite simple
@@ -208,7 +202,7 @@ function target_observation(target)
     # TODO: add diagram to README showing how observed_v math works
     observed_v = cos(target_local_θ - observed_θ) * target_local_v
 
-    # TODO: gaussian noise goes here
+    # TODO: gaussian noise goes here, depends on SNR?
 
     return TargetObservation(target.id, r, observed_θ, observed_v)
 end
