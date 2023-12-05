@@ -1,6 +1,6 @@
 module SkySurveillance
 
-using Distributions: Uniform, Normal
+using Distributions: Uniform, Normal, pdf
 using Flux:
     Adam,
     Chain,
@@ -32,21 +32,25 @@ using Plots: @animate, Plots, Shape, heatmap!, mov, plot, plot!
 using Random: AbstractRNG, Xoshiro
 using StaticArrays: @SMatrix, @SVector, SA, SMatrix, SVector
 using TOML: TOML
+using Dates: format, now
 
 PARAMS = TOML.parsefile(ARGS[1])
 println("-------------------- begin params '$(ARGS[1])'")
 TOML.print(PARAMS)
 println("-------------------- end params '$(ARGS[1])'")
 
-if PARAMS["use_gpu"]
-    if PARAMS["gpu_type"] == "CUDA"
-        using CUDA
-        CUDA.allowscalar(true)
-    elseif PARAMS["gpu_type"] == "Metal"
-        using Metal
-        Metal.allowscalar(true)
-    end
-end
+# if PARAMS["use_gpu"]
+#     if PARAMS["gpu_type"] == "CUDA"
+#         using CUDA
+#         CUDA.allowscalar(true)
+#     elseif PARAMS["gpu_type"] == "Metal"
+#         using Metal
+#         Metal.allowscalar(true)
+#     end
+# end
+
+run_time = format(now(), "YYYYmmdd-HHMMSS-sss")
+@info "Run: $(run_time)"
 
 include("Flat_POMDP/flat_pomdp.jl")
 include("Flat_POMDP/solver.jl")
@@ -56,7 +60,8 @@ rng = Xoshiro(PARAMS["seed"])
 
 pomdp = FlatPOMDP(; rng=rng)
 
-solver = FigOfflineSolver()
+#solver = FigOfflineSolver()
+solver = FigFilterSolver()
 policy = solve(solver, pomdp)
 #
 # ds = DisplaySimulator(; max_steps=100, extra_final=false, spec="(s,a,o,b)")
@@ -68,10 +73,10 @@ policy = solve(solver, pomdp)
 #     #@show step.b
 # end
 if PARAMS["render"]
-    anim = @animate for step in stepthrough(pomdp, policy; max_steps=1000)
+    anim = @animate for step in stepthrough(pomdp, policy; max_steps=100)
         POMDPTools.render(pomdp, step)
     end
-    mov(anim, "$(PARAMS["video_path"]).mov"; loop=1)
+    mov(anim, "$(PARAMS["video_path"])$(run_time).mov"; loop=1)
 end
 
 # solver = QMDPSolver() # From QMDP

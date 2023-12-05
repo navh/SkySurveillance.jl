@@ -10,22 +10,16 @@ struct WeightedParticle
     w::Float32
 end
 
-#ParticleVector = SVector{PARAMS["n_particles"],WeightedParticle}
-
 struct SingleFilter
     id::Int32
-    #particles::ParticleVector
-    particles::WeightedParticle[]
+    # particles::SVector{PARAMS["n_particles"],WeightedParticle}
+    particles::Vector{WeightedParticle}
     last_x::Float32
     last_y::Float32
     last_t::Float32
 end
 
-struct MultiFilter
-    filters::SingleFilter[]
-end
-
-function propagate_particle(p::WeightedParticle, time::Float32)
+function propagate_particle(p::WeightedParticle, time::Float64)
     return WeightedParticle(
         #p.x + p.ẋ * time + rand(Normal(0.0, 25.0)),
         p.x + p.ẋ * time,
@@ -37,10 +31,10 @@ function propagate_particle(p::WeightedParticle, time::Float32)
     )
 end
 
-function propagate_filter(filter::SingleFilter, time::Float32)
+function propagate_filter(filter::SingleFilter, time::Float64)
     return SingleFilter(
         filter.id,
-        [propagate_particle(particle, time) for particle in filter],
+        [propagate_particle(particle, time) for particle in filter.particles],
         filter.last_x,
         filter.last_y,
         filter.last_t + time,
@@ -58,7 +52,7 @@ function reweight_particle(particle::WeightedParticle, obs_x, obs_y, obs_ẋ, ob
         # The more I think about this, the less that I think it should be related to the other distributions
         # Should this just be 1/(1+RMS) or something?
     )
-    return WeightedParticle{particle.x,particle.y,particle.ẋ,particle.ẏ,weight}
+    return WeightedParticle(particle.x, particle.y, particle.ẋ, particle.ẏ, weight)
 end
 
 function reweight_filter(filter::SingleFilter, obs)
@@ -93,7 +87,7 @@ function initialize_filter(obs)
 end
 
 function weight_sum(filter::SingleFilter)
-    return sum[particle.w for particle in filter.particles]
+    return sum([particle.w for particle in filter.particles])
 end
 
 function low_variance_resampler(filter::SingleFilter)
@@ -147,8 +141,11 @@ function POMDPs.update(up::MultiFilterUpdater, belief_old, action, observation)
 
     # 2.2) - Non-observed, reweight based on observation, drop empty filters
     observed_filters = filter(x -> x.id ∈ [o.id for o in observation], propagated_belief)
+
     reweighted_filters = [
-        reweight_filter(filter, observation) for filter in propagated_belief
+        reweight_filter(
+            filter, observation[findfirst(obs -> obs.id == filter.id, observation)]
+        ) for filter in observed_filters
     ]
 
     # 2.3) - Filterless observations, initialize a new filter
