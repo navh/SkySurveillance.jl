@@ -3,6 +3,7 @@
 seed = 42
 
 render = true
+animation_steps = 2000
 video_path = "./animations/"
 
 search_strategy = "random" # one of ["random","sweep"]

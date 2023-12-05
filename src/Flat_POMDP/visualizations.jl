@@ -9,17 +9,22 @@ end
 
 function POMDPTools.render(pomdp::FlatPOMDP, step)
     plt = plot(;
-        xlims=(-XY_MAX_METERS, XY_MAX_METERS), ylims=(-XY_MAX_METERS, XY_MAX_METERS)
+        axis=nothing,
+        showaxis=false,
+        size=(1920, 1080),
+        xlims=(-XY_MAX_METERS, XY_MAX_METERS),
+        ylims=(-XY_MAX_METERS, XY_MAX_METERS),
     )
 
-    #fig = real_occupancy(step.s)
-    # fig = step.b
-    # xyticks =
-    #     XY_MIN_METERS:((XY_MAX_METERS - XY_MIN_METERS) / PARAMS["xy_bins"]):XY_MAX_METERS
-    # heatmap!(xyticks, xyticks, fig; clims=(0.0, 1.0), c=:binary)
-    # for filter in step.b
-    #     #println(filter)
-    # end
+    for filter in step.b
+        plot!(
+            plt,
+            [(particle.x, particle.y) for particle in filter.particles];
+            markeralpha=0.2,
+            markerstrokewidth=0,
+            seriestype=:scatter,
+        )
+    end
 
     # Draw visible circle
     plot!(
@@ -51,6 +56,7 @@ function POMDPTools.render(pomdp::FlatPOMDP, step)
         plt,
         [(target.x, target.y) for target in step.s.targets];
         markercolor=:blue,
+        markershape=:xcross,
         seriestype=:scatter,
     )
 
@@ -63,6 +69,7 @@ function POMDPTools.render(pomdp::FlatPOMDP, step)
             markershape=:xcross,
             markercolor=:red,
             markersize=10,
+            markerstrokewidth=5,
         )
     end
 

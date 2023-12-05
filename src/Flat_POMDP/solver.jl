@@ -21,12 +21,10 @@ end
 
 function propagate_particle(p::WeightedParticle, time::Float64)
     return WeightedParticle(
-        #p.x + p.ẋ * time + rand(Normal(0.0, 25.0)),
-        p.x + p.ẋ * time,
-        #p.y + p.ẏ * time + rand(Normal(0.0, 25.0)),
-        p.y + p.ẏ * time,
-        p.ẋ + rand(Normal(0.0, 6.0)), # Every time step... this is a LOT of noise
-        p.ẏ + rand(Normal(0.0, 6.0)),
+        p.x + p.ẋ * time + rand(Normal(0.0, 200.0)),
+        p.y + p.ẏ * time + rand(Normal(0.0, 200.0)),
+        p.ẋ + rand(Normal(0.0, 16.0)), # Every time step... this is a LOT of noise
+        p.ẏ + rand(Normal(0.0, 16.0)),
         p.w,
     )
 end
@@ -42,16 +40,17 @@ function propagate_filter(filter::SingleFilter, time::Float64)
 end
 
 function reweight_particle(particle::WeightedParticle, obs_x, obs_y, obs_ẋ, obs_ẏ)
-    weight = (
-        #TODO: grab distributions from below or global these or something
-        pdf(Normal(0.0, 25.0), particle.x - obs_x) +
-        pdf(Normal(0.0, 25.0), particle.y - obs_y) +
-        pdf(Normal(0.0, 6.0), particle.ẋ - obs_ẋ) +
-        pdf(Normal(0.0, 6.0), particle.ẏ - obs_ẏ)
-        # Should I be adding on some points here for nailing the doppler velocity?
-        # The more I think about this, the less that I think it should be related to the other distributions
-        # Should this just be 1/(1+RMS) or something?
-    )
+    # weight = (
+    #     #TODO: grab distributions from below or global these or something
+    #     pdf(Normal(0.0, 25.0), particle.x - obs_x) +
+    #     pdf(Normal(0.0, 25.0), particle.y - obs_y) +
+    #     pdf(Normal(0.0, 6.0), particle.ẋ - obs_ẋ) +
+    #     pdf(Normal(0.0, 6.0), particle.ẏ - obs_ẏ)
+    #     # Should I be adding on some points here for nailing the doppler velocity?
+    #     # The more I think about this, the less that I think it should be related to the other distributions
+    #     # Should this just be 1/(1+RMS) or something?
+    # )
+    weight = 1 / (1 + √((particle.x - obs_x)^2 + (particle.y - obs_y)^2))# just rms of distance? 
     return WeightedParticle(particle.x, particle.y, particle.ẋ, particle.ẏ, weight)
 end
 
@@ -75,10 +74,12 @@ end
 function initialize_filter(obs)
     x = obs.r * cos(obs.θ)
     y = obs.r * sin(obs.θ)
-    ẋ = obs.v * cos(obs.θ) #TODO: does this check out? Should these maybe just be zero?
-    ẏ = obs.v * sin(obs.θ)
+    #ẋ = obs.v * cos(obs.θ) #TODO: does this check out? Should these maybe just be zero?
+    #ẏ = obs.v * sin(obs.θ)
+    ẋ = 0
+    ẏ = 0
     d = Normal(0.0, 25.0) # TODO: paramaterize at least σ? Ask ravi for a good theta? different d for r and v? Really comes from bandwidth, 3mhz, c/2b? +/- 25m. 1ghz radar, that would be 0.3% bandwidth. Really low?.
-    ḋ = Normal(0.0, 6.0) # Some percent of range, really comes from PRF. Let's say PRF of 2khz, 100samples, v/λ, if λ is 50cm, so 6m/s.
+    ḋ = Normal(0.0, 100.0) # Some percent of range, really comes from PRF. Let's say PRF of 2khz, 100samples, v/λ, if λ is 50cm, so 6m/s.
     particles = [
         WeightedParticle(x + rand(d), y + rand(d), ẋ + rand(ḋ), ẏ + rand(ḋ), 1.0) for
         _ in 1:PARAMS["n_particles"]

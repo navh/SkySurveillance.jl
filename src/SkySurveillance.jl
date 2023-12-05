@@ -1,6 +1,7 @@
 module SkySurveillance
 
-using Distributions: Uniform, Normal, pdf
+using Dates: format, now
+using Distributions: Normal, Uniform, pdf
 using Flux:
     Adam,
     Chain,
@@ -32,7 +33,6 @@ using Plots: @animate, Plots, Shape, heatmap!, mov, plot, plot!
 using Random: AbstractRNG, Xoshiro
 using StaticArrays: @SMatrix, @SVector, SA, SMatrix, SVector
 using TOML: TOML
-using Dates: format, now
 
 PARAMS = TOML.parsefile(ARGS[1])
 println("-------------------- begin params '$(ARGS[1])'")
@@ -49,40 +49,25 @@ println("-------------------- end params '$(ARGS[1])'")
 #     end
 # end
 
-run_time = format(now(), "YYYYmmdd-HHMMSS-sss")
-@info "Run: $(run_time)"
-
 include("Flat_POMDP/flat_pomdp.jl")
 include("Flat_POMDP/solver.jl")
 include("Flat_POMDP/visualizations.jl")
 
-rng = Xoshiro(PARAMS["seed"])
+run_time = format(now(), "YYYYmmdd-HHMMSS-sss")
+@info "Run: $(run_time)"
 
+rng = Xoshiro(PARAMS["seed"])
 pomdp = FlatPOMDP(; rng=rng)
 
-#solver = FigOfflineSolver()
 solver = FigFilterSolver()
 policy = solve(solver, pomdp)
-#
-# ds = DisplaySimulator(; max_steps=100, extra_final=false, spec="(s,a,o,b)")
-# simulate(ds, pomdp, policy)
-#
-# hr = HistoryRecorder(; max_steps=50)
-# history = simulate(hr, pomdp, policy)
-# for step in eachstep(history)
-#     #@show step.b
-# end
+
 if PARAMS["render"]
-    anim = @animate for step in stepthrough(pomdp, policy; max_steps=100)
+    anim = @animate for step in
+                        stepthrough(pomdp, policy; max_steps=PARAMS["animation_steps"])
         POMDPTools.render(pomdp, step)
     end
     mov(anim, "$(PARAMS["video_path"])$(run_time).mov"; loop=1)
 end
-
-# solver = QMDPSolver() # From QMDP
-#
-# policy = solve(solver, pomdp)
-#
-# belief_updater = updater(policy)
 
 end
