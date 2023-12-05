@@ -10,26 +10,72 @@ struct WeightedParticle
     w::Float32
 end
 
-ParticleVector = SVector{PARAMS["n_particles"],WeightedParticle}
+#ParticleVector = SVector{PARAMS["n_particles"],WeightedParticle}
 
 struct SingleFilter
     id::Int32
-    particles::ParticleVector
+    #particles::ParticleVector
+    particles::WeightedParticle[]
+    last_x::Float32
+    last_y::Float32
+    last_t::Float32
 end
 
-struct MultiFilter = SingleFilter[] end
+struct MultiFilter
+    filters::SingleFilter[]
+end
 
 function propagate_particle(p::WeightedParticle, time::Float32)
-    return WeightedParticle(p.x + p.ẋ * time, p.y + p.ẏ * time, p.ẋ, p.ẏ, p.w)
+    return WeightedParticle(
+        #p.x + p.ẋ * time + rand(Normal(0.0, 25.0)),
+        p.x + p.ẋ * time,
+        #p.y + p.ẏ * time + rand(Normal(0.0, 25.0)),
+        p.y + p.ẏ * time,
+        p.ẋ + rand(Normal(0.0, 6.0)), # Every time step... this is a LOT of noise
+        p.ẏ + rand(Normal(0.0, 6.0)),
+        p.w,
+    )
 end
 
 function propagate_filter(filter::SingleFilter, time::Float32)
-    return [propagate_particle(particle, time) for particle in filter]
+    return SingleFilter(
+        filter.id,
+        [propagate_particle(particle, time) for particle in filter],
+        filter.last_x,
+        filter.last_y,
+        filter.last_t + time,
+    )
 end
 
-function reweight(filter::SingleFilter, observation)
-    # TODO: implement
-    return filter
+function reweight_particle(particle::WeightedParticle, obs_x, obs_y, obs_ẋ, obs_ẏ)
+    weight = (
+        #TODO: grab distributions from below or global these or something
+        pdf(Normal(0.0, 25.0), particle.x - obs_x) +
+        pdf(Normal(0.0, 25.0), particle.y - obs_y) +
+        pdf(Normal(0.0, 6.0), particle.ẋ - obs_ẋ) +
+        pdf(Normal(0.0, 6.0), particle.ẏ - obs_ẏ)
+        # Should I be adding on some points here for nailing the doppler velocity?
+        # The more I think about this, the less that I think it should be related to the other distributions
+        # Should this just be 1/(1+RMS) or something?
+    )
+    return WeightedParticle{particle.x,particle.y,particle.ẋ,particle.ẏ,weight}
+end
+
+function reweight_filter(filter::SingleFilter, obs)
+    x = obs.r * cos(obs.θ)
+    y = obs.r * sin(obs.θ)
+    ẋ = (x - filter.last_x) / filter.last_t # TODO: should I be using v at all here?
+    ẏ = (y - filter.last_y) / filter.last_t
+
+    # Throw away particles not moving in the right direction.
+
+    return SingleFilter(
+        filter.id,
+        [reweight_particle(particle, x, y, ẋ, ẏ) for particle in filter.particles],
+        x,
+        y,
+        0.0,
+    )
 end
 
 function initialize_filter(obs)
@@ -37,17 +83,34 @@ function initialize_filter(obs)
     y = obs.r * sin(obs.θ)
     ẋ = obs.v * cos(obs.θ) #TODO: does this check out? Should these maybe just be zero?
     ẏ = obs.v * sin(obs.θ)
-    d = Normal(; μ=0.0, σ=100.0) # TODO: paramaterize at least σ? Ask ravi for a good theta? different d for r and v? 
-    particles = ParticleVector([
-        WeightedParticle(x + rand(d), y + rand(d), ẋ + rand(d), ẏ + rand(d), 1.0) for
+    d = Normal(0.0, 25.0) # TODO: paramaterize at least σ? Ask ravi for a good theta? different d for r and v? Really comes from bandwidth, 3mhz, c/2b? +/- 25m. 1ghz radar, that would be 0.3% bandwidth. Really low?.
+    ḋ = Normal(0.0, 6.0) # Some percent of range, really comes from PRF. Let's say PRF of 2khz, 100samples, v/λ, if λ is 50cm, so 6m/s.
+    particles = [
+        WeightedParticle(x + rand(d), y + rand(d), ẋ + rand(ḋ), ẏ + rand(ḋ), 1.0) for
         _ in 1:PARAMS["n_particles"]
-    ])
-    return SingleFilter(obs.id, particles)
+    ]
+    return SingleFilter(obs.id, particles, x, y, 0.0)
 end
 
-function low_variance_resampler(filter)
-    # TODO: implement
-    return filter
+function weight_sum(filter::SingleFilter)
+    return sum[particle.w for particle in filter.particles]
+end
+
+function low_variance_resampler(filter::SingleFilter)
+    ps = Array{WeightedParticle}(undef, PARAMS["n_particles"])
+    r = rand(rng) * weight_sum(filter) / PARAMS["n_particles"]
+    i = 1
+    c = filter.particles[i].w
+    U = r
+    for m in 1:PARAMS["n_particles"]
+        while U > c && i < length(filter.particles)
+            i += 1
+            c += filter.particles[i].w
+        end
+        U += weight_sum(filter) / PARAMS["n_particles"]
+        ps[m] = filter.particles[i]
+    end
+    return SingleFilter(filter.id, ps, filter.last_x, filter.last_y, filter.last_t)
 end
 
 function POMDPs.solve(::FigFilterSolver, pomdp::POMDP)
@@ -84,7 +147,9 @@ function POMDPs.update(up::MultiFilterUpdater, belief_old, action, observation)
 
     # 2.2) - Non-observed, reweight based on observation, drop empty filters
     observed_filters = filter(x -> x.id ∈ [o.id for o in observation], propagated_belief)
-    reweighted_filters = [reweight(filter, observation) for filter in propagated_belief]
+    reweighted_filters = [
+        reweight_filter(filter, observation) for filter in propagated_belief
+    ]
 
     # 2.3) - Filterless observations, initialize a new filter
     new_observations = filter(o -> o.id ∉ [f.id for f in propagated_belief], observation)
