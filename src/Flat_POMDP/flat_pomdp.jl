@@ -28,11 +28,11 @@ CellType = Float32
 Cells = SMatrix{PARAMS["xy_bins"],PARAMS["xy_bins"],CellType}
 
 struct Target
+    id::Int32
     x::Float32
     y::Float32
-    x_velocity::Float32
-    y_velocity::Float32
-    t_since_observation::Float32 # Just for reward
+    ẋ::Float32
+    ẏ::Float32
 end
 
 struct FlatState
@@ -41,33 +41,28 @@ end
 
 function update_target(target::Target, time::Float32, observed::Bool)
     return Target(
-        target.x + target.x_velocity * time,
-        target.y + target.y_velocity * time,
-        target.x_velocity,
-        target.y_velocity,
-        observed ? 0.0 : target.t_since_observation + time,
+        target.id,
+        target.x + target.ẋ * time,
+        target.y + target.ẏ * time,
+        target.ẋ,
+        target.ẏ,
     )
 end
 
 struct TargetObservation
+    id::Int32  # unique target id
     r::Float32 # range (meters)
     θ::Float32 # azimuth (radians)
     v::Float32 # radial velocity (meters/second)
-    t::Float32 # time since observation
 end
 
-FlatObservation = Vector{TargetObservation} # Ignore the below, I think this can just change in length 
-# FlatObservation = SVector{PARAMS["number_of_targets"],TargetObservation}
-# I don't think this reveals the total number of targets in any meaningful way
-# It ensures that on any observation I can *at least* fit them all
+FlatObservation = Vector{TargetObservation}
 
-FlatAction = Float64
+FlatAction = Float64 # Must be left 64 due to rand(uniform(f32,f32)) unwaveringly returning f64
 # To play nice with MCTS should I just pick wedges?
 # Eventually I'd like Tuple{Float32,Float32,Float32} # azimuth, beamwidth, dwell_time
-# But I'm already having dimensionality nightmares, so this will have to do for now.
 
 struct FlatBelief
-    #observations_buffer::SVector{OBSERVATION_BUFFER_SIZE,TargetObservation}
     occupancy_grid::Cells
 end
 
@@ -126,7 +121,7 @@ function initialize_random_targets(rng::RNG)::FlatState where {RNG<:AbstractRNG}
         PARAMS["number_of_targets"],
     )
     initial_targets = [
-        Target(xs[i], ys[i], x_velocities[i], y_velocities[i], 0) for
+        Target(i, xs[i], ys[i], x_velocities[i], y_velocities[i]) for
         i in 1:PARAMS["number_of_targets"]
     ]
     return FlatState(initial_targets)
@@ -141,7 +136,7 @@ end
 ### actions 
 
 function POMDPs.actions(pomdp::FlatPOMDP)
-    return Uniform{Float32}(0, 1) # This feels wrong... I guess it's used for sampling?
+    return Uniform{Float32}(0, 1)
 end
 
 """
@@ -154,8 +149,6 @@ function POMDPs.action(p::RandomPolicy, b::FlatBelief)
     possible_actions = POMDPs.actions(p.problem, b)
     return rand(p.problem.pomdp.rng, possible_actions)
 end
-
-# POMDPs.actionindex(POMDP::FlatPOMDP, a::FlatAction) = a # Not discrete
 
 # observations 
 
@@ -178,41 +171,40 @@ function target_spotted(target::Target, action::FlatAction, beamwidth::Float32)
     return abs((target_θ - action_to_rad(action))) < beamwidth # TODO: tried to fix the 180 prob, unsure about new issues around 0-1 transition?
 end
 
-function real_occupancy(s::FlatState)
-    #occupancy = zeros(Cells)
-    occupancy = zeros(CellType, PARAMS["xy_bins"], PARAMS["xy_bins"])
-    for target in s.targets
-        x_bin = ceil(
-            Int64,
-            (target.x - XY_MIN_METERS) / (XY_MAX_METERS - XY_MIN_METERS) *
-            PARAMS["xy_bins"],
-        )
-        y_bin = ceil(
-            Int64,
-            (target.y - XY_MIN_METERS) / (XY_MAX_METERS - XY_MIN_METERS) *
-            PARAMS["xy_bins"],
-        )
-        if 0 < x_bin <= PARAMS["xy_bins"] && 0 < y_bin <= PARAMS["xy_bins"]
-            occupancy[y_bin, x_bin] = 1
-        end
-    end
-    return occupancy
-    # return SVector{length(Cells),Float32}(occupancy) #Hack to make it play nice with the model
-end
+# TODO: delete the following
+# function real_occupancy(s::FlatState)
+#     occupancy = zeros(CellType, PARAMS["xy_bins"], PARAMS["xy_bins"])
+#     for target in s.targets
+#         x_bin = ceil(
+#             Int64,
+#             (target.x - XY_MIN_METERS) / (XY_MAX_METERS - XY_MIN_METERS) *
+#             PARAMS["xy_bins"],
+#         )
+#         y_bin = ceil(
+#             Int64,
+#             (target.y - XY_MIN_METERS) / (XY_MAX_METERS - XY_MIN_METERS) *
+#             PARAMS["xy_bins"],
+#         )
+#         if 0 < x_bin <= PARAMS["xy_bins"] && 0 < y_bin <= PARAMS["xy_bins"]
+#             occupancy[y_bin, x_bin] = 1
+#         end
+#     end
+#     return occupancy
+#     # return SVector{length(Cells),Float32}(occupancy) #Hack to make it play nice with the model
+# end
 
 function target_observation(target)
     # Sensor is at origin so this is all quite simple
     r = √(target.x^2 + target.y^2)
     observed_θ = atan(target.y, target.x) # note the reversal
-    target_local_θ = atan(target.y_velocity, target.x_velocity) # note the reversal
-    target_local_v = √(target.x_velocity^2 + target.y_velocity^2)
+    target_local_θ = atan(target.ẏ, target.ẋ) # note the reversal
+    target_local_v = √(target.ẋ^2 + target.ẏ^2)
     # TODO: add diagram to README showing how observed_v math works
     observed_v = cos(target_local_θ - observed_θ) * target_local_v
-    t = 0.0
 
-    # TODO: gaussian noise goes here
+    # TODO: gaussian noise goes here, depends on SNR?
 
-    return TargetObservation(r, observed_θ, observed_v, t)
+    return TargetObservation(target.id, r, observed_θ, observed_v)
 end
 
 function illumination_observation(action::FlatAction, state::FlatState)
@@ -255,11 +247,11 @@ end
 
 function update_target(target::Target, time)
     return Target(
-        target.x + target.x_velocity * time,
-        target.y + target.y_velocity * time,
-        target.x_velocity,
-        target.y_velocity,
-        target.t_since_observation + time,
+        target.id,
+        target.x + target.ẋ * time,
+        target.y + target.ẏ * time,
+        target.ẋ,
+        target.ẏ,
     )
 end
 
@@ -274,12 +266,6 @@ function generate_s(
     ])
     return FlatState(new_targets)
 end
-
-# # Not totally sure why I had to define this when I'm using 'gen'...
-# # Turns out I do not
-# function POMDPs.transition(pomdp::FlatPOMDP, s::FlatState, a::FlatAction)
-#     return generate_s(pomdp, s, a, pomdp.rng)
-# end
 
 ### rewards 
 
