@@ -1,180 +1,98 @@
 # Note: fig from "fully illuminated guess", nothing to do with FIB, I'll probably rename due to similarity
 
-struct FigOfflineSolver <: Solver end
+struct FigFilterSolver <: Solver end
 
-function POMDPs.solve(::FigOfflineSolver, pomdp::POMDP)
+struct WeightedParticle
+    x::Float32
+    y::Float32
+    ẋ::Float32
+    ẏ::Float32
+    w::Float32
+end
 
-    #TODO: train RNN+decoder here?
-    figup = train(pomdp)
-    figup_state = Flux.state(figup)
-    jldsave("$(PARAMS["model_path"])-figup.jld2"; figup_state)
-    #figup = load_model("figup4.jld2")
-    #
-    up = FigUpdater(figup)
+ParticleVector = SVector{PARAMS["n_particles"],WeightedParticle}
+
+struct SingleFilter
+    id::Int32
+    particles::ParticleVector
+end
+
+struct MultiFilter = SingleFilter[] end
+
+function propagate_particle(p::WeightedParticle, time::Float32)
+    return WeightedParticle(p.x + p.ẋ * time, p.y + p.ẏ * time, p.ẋ, p.ẏ, p.w)
+end
+
+function propagate_filter(filter::SingleFilter, time::Float32)
+    return [propagate_particle(particle, time) for particle in filter]
+end
+
+function reweight(filter::SingleFilter, observation)
+    # TODO: implement
+    return filter
+end
+
+function initialize_filter(obs)
+    x = obs.r * cos(obs.θ)
+    y = obs.r * sin(obs.θ)
+    ẋ = obs.v * cos(obs.θ) #TODO: does this check out? Should these maybe just be zero?
+    ẏ = obs.v * sin(obs.θ)
+    d = Normal(; μ=0.0, σ=100.0) # TODO: paramaterize at least σ? Ask ravi for a good theta? different d for r and v? 
+    particles = ParticleVector([
+        WeightedParticle(x + rand(d), y + rand(d), ẋ + rand(d), ẏ + rand(d), 1.0) for
+        _ in 1:PARAMS["n_particles"]
+    ])
+    return SingleFilter(obs.id, particles)
+end
+
+function low_variance_resampler(filter)
+    # TODO: implement
+    return filter
+end
+
+function POMDPs.solve(::FigFilterSolver, pomdp::POMDP)
+    up = MultiFilterUpdater(pomdp.rng)
     return RandomPolicy(pomdp.rng, pomdp, up)
 end
 
-struct FigUpdater <: POMDPs.Updater
-    model
+struct MultiFilterUpdater <: POMDPs.Updater
+    rng::AbstractRNG
+    # dynamics(x, u, rng) = x + u + randn(rng)
+    # y_likelihood(x_previous, u, x, y) = pdf(Normal(), y - x)
+    # model = ParticleFilterModel{Float32}(dynamics, y_likelihood)
+    # pf = BootstrapFilter(model, 10)
 end
 
-function POMDPs.initialize_belief(up::FigUpdater, d)
-    Flux.reset!(up.model)
-    return zeros(Cells)
+function POMDPs.initialize_belief(up::MultiFilterUpdater, d)
+    # TODO: think about random particles everywhere?
+    return SingleFilter[] # Empty for now
 end
 
-function POMDPs.update(up::FigUpdater, b, a, o)
-    if isempty(o)
-        return Cells(up.model(SVector{5,Float32}(a, 0.0, 0.0, 0.0, 0.0)))
-    end
-    guesses = [
-        up.model(
-            SVector{5,Float32}(
-                a,
-                1.0,
-                target.r / PARAMS["radar_max_range_meters"],
-                target.θ / π,
-                target.v / √(2 * TARGET_VELOCITY_MAX_METERS_PER_SECOND^2),
-            ), # The second 1.0 represents that a measurement has been made
-        ) for target in o
-    ]
-    return Cells(last(guesses))
-end
+function POMDPs.update(up::MultiFilterUpdater, belief_old, action, observation)
+    # 1) Prediction (or propagation) - each state particle is simulated forward one step in time
 
-### nets.jl copy paste below
+    # TODO: pack 'time' in with action?
+    time = PARAMS["dwell_time_seconds"]
 
-# based on https://github.com/FluxML/model-zoo/blob/master/text/char-rnn/char-rnn.jl
-function build_model(input_width::Int, output_width::Int)
-    h = 256
-    return Chain(
-        LSTM(input_width => h),
-        LSTM(h => h),
-        LSTM(h => h),
-        Dense(h => h), # TODO: consider relu?
-        Dense(h => h),
-        Dense(h => output_width),
-    )
-end
+    propagated_belief = [propagate_filter(filter, time) for filter in belief_old]
 
-# TODO: can this be done on the fly? Flux's docs don't make it obvious... this feels foolish
-# Answer: Yes: data must support the 'getobs' method https://fluxml.ai/Flux.jl/stable/data/mlutils/#MLUtils.DataLoader
-function get_data(pomdp::FlatPOMDP, sequence_count::Int64, device)
-    @info "Generating $(sequence_count) sequences"
+    # 2) Reweighting - an explicit measurement (observation) model is used to calculate a new weight
+    ### 3 cases: observationless filters, filter with observation, filterless observations 
 
-    data = []
-    # Ugh, ugly svector declarations to make it play nice with CUDA
-    x_type = SVector{5,Float32}
-    y_type = SVector{length(Cells),Float32} # Apparently large StaticArrays stresses the compiler and does more harm than good
+    # 2.1) - Non-observed, do nothing
+    no_observed_filters = filter(x -> x.id ∉ [o.id for o in observation], propagated_belief)
 
-    #for sequence_number in 1:(PARAMS["train_sequences"] + PARAMS["test_sequences"])
-    for sequence_number in 1:sequence_count
-        # TODO: check rng, 'split' the RNG like JAX? does it do this automagically?
-        #rng = Xoshiro(PARAMS["seed"] + sequence_number)
-        x = []
-        y = []
+    # 2.2) - Non-observed, reweight based on observation, drop empty filters
+    observed_filters = filter(x -> x.id ∈ [o.id for o in observation], propagated_belief)
+    reweighted_filters = [reweight(filter, observation) for filter in propagated_belief]
 
-        pomdp = FlatPOMDP(; rng=pomdp.rng)
+    # 2.3) - Filterless observations, initialize a new filter
+    new_observations = filter(o -> o.id ∉ [f.id for f in propagated_belief], observation)
 
-        solver = RandomSolver(rng)
-        policy = solve(solver, pomdp)
-        hr = HistoryRecorder(; max_steps=PARAMS["steps_per_sequence"])
-        history = simulate(hr, pomdp, policy)
-        for (s, a, o) in eachstep(history, "(s,a,o)")
-            occupancy_matrix = real_occupancy(s)
-            if isempty(o)
-                push!(x, x_type(a, 0.0, 0.0, 0.0, 0.0))
-                push!(y, y_type(occupancy_matrix))
-            else
-                for target in o
-                    push!(
-                        x,
-                        x_type(
-                            a,
-                            1.0,
-                            target.r / PARAMS["radar_max_range_meters"],
-                            target.θ / π,
-                            target.v / √(2 * TARGET_VELOCITY_MAX_METERS_PER_SECOND^2),
-                        ), # second 1.0 represents that a measurement has been made
-                    )
-                    push!(y, y_type(occupancy_matrix))
-                end
-            end
-        end
-        x = x[1:PARAMS["steps_per_sequence"]]
-        y = y[1:PARAMS["steps_per_sequence"]]
-        x = device(x)
-        y = device(y)
-        push!(data, (x, y))
-    end
-    #data = xy_tuple_type(data)
-    return device(data)
-end
+    new_filters = [initialize_filter(o) for o in new_observations]
 
-function train(pomdp::FlatPOMDP)
-    device = if PARAMS["use_gpu"]
-        gpu
-    else
-        cpu
-    end
-    @info "Beginning training on $(device)"
+    all_filters = vcat(no_observed_filters, reweighted_filters, new_filters)
 
-    ## Get Data
-    @info "Get Data"
-    trainData = get_data(pomdp, PARAMS["train_sequences"], device)
-    testData = get_data(pomdp, PARAMS["test_sequences"], device)
-
-    @info "Constructing Model"
-    model = device(build_model(5, length(Cells)))
-
-    # function loss(m, xs, ys)
-    #     Flux.reset!(m)
-    #     return sum(logitcrossentropy.([m(x) for x in xs], ys))
-    # end
-    ZEST = PARAMS["xy_bins"]^2 / PARAMS["number_of_targets"]
-    #
-    # function loss(m, xs, ys)
-    #     Flux.reset!(m)
-    #     return sum(mse.([m(x) * ZEST for x in xs], ys * ZEST)) / length(xs)
-    function loss(m, xs, ys)
-        Flux.reset!(m)
-        return sum(mse.([m(x) for x in xs], ys, agg=sum))
-    end
-
-    ## Training
-    opt_state = Flux.setup(Adam(PARAMS["learning_rate"]), model)
-
-    train_loss_history = Float32[]
-    test_loss_history = Float32[]
-
-    for epoch in 1:PARAMS["epochs"]
-        @info "Training, epoch $(epoch) / $(PARAMS["epochs"])"
-        Flux.train!(loss, model, trainData, opt_state)
-        train_loss =
-            sum(loss.(Ref(model), [x[1] for x in trainData], [x[2] for x in trainData])) / length(trainData)
-        push!(train_loss_history, train_loss)
-        @info "train_loss: $(train_loss)"
-
-        test_loss =
-            sum(loss.(Ref(model), [x[1] for x in testData], [x[2] for x in testData])) / length(testData)
-        push!(test_loss_history, test_loss)
-        @info "test_loss: $(test_loss)"
-
-        if PARAMS["write_model"]
-            if PARAMS["use_gpu"]
-                cpu(model) # Dump it onto the CPU to save 
-            end
-            jldsave("$(PARAMS["model_path"])-$(epoch).jld2"; model_state=Flux.state(model))
-            if PARAMS["use_gpu"]
-                gpu(model)
-            end
-        end
-
-        ## Show loss-per-step over the test set
-        #@info "loss-per-step $(sum(loss.(Ref(model),[x[1] for x in testData],[x[2] for x in testData])) / PARAMS["test_sequences"]) "
-    end
-    @info "train_loss_history"
-    @info train_loss_history
-    @info "test_loss_history"
-    @info test_loss_history
-    return model
+    # 3) Resampling - a new collection of state particles is generated with particle. frequencies proportional to the new weights
+    return [low_variance_resampler(f) for f in all_filters] # O(n) resampler, page 110 of Probabilistic Robotics by Thurn, Burgard, and Fox.
 end

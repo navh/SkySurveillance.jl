@@ -30,3 +30,6 @@ xy_bins = 20
 dwell_time_seconds = 200e-3
 target_velocity_max_meters_per_second = 700
 include_no_observations = true
+
+# Filter Parameters
+n_particles = 100

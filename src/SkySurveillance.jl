@@ -1,6 +1,6 @@
 module SkySurveillance
 
-using Distributions: Uniform
+using Distributions: Uniform, Normal
 using Flux:
     Adam,
     Chain,

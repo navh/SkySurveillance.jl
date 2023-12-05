@@ -31,8 +31,8 @@ struct Target
     id::Int32
     x::Float32
     y::Float32
-    x_velocity::Float32
-    y_velocity::Float32
+    ẋ::Float32
+    ẏ::Float32
 end
 
 struct FlatState
@@ -42,10 +42,10 @@ end
 function update_target(target::Target, time::Float32, observed::Bool)
     return Target(
         target.id,
-        target.x + target.x_velocity * time,
-        target.y + target.y_velocity * time,
-        target.x_velocity,
-        target.y_velocity,
+        target.x + target.ẋ * time,
+        target.y + target.ẏ * time,
+        target.ẋ,
+        target.ẏ,
     )
 end
 
@@ -197,8 +197,8 @@ function target_observation(target)
     # Sensor is at origin so this is all quite simple
     r = √(target.x^2 + target.y^2)
     observed_θ = atan(target.y, target.x) # note the reversal
-    target_local_θ = atan(target.y_velocity, target.x_velocity) # note the reversal
-    target_local_v = √(target.x_velocity^2 + target.y_velocity^2)
+    target_local_θ = atan(target.ẏ, target.ẋ) # note the reversal
+    target_local_v = √(target.ẋ^2 + target.ẏ^2)
     # TODO: add diagram to README showing how observed_v math works
     observed_v = cos(target_local_θ - observed_θ) * target_local_v
 
@@ -248,10 +248,10 @@ end
 function update_target(target::Target, time)
     return Target(
         target.id,
-        target.x + target.x_velocity * time,
-        target.y + target.y_velocity * time,
-        target.x_velocity,
-        target.y_velocity,
+        target.x + target.ẋ * time,
+        target.y + target.ẏ * time,
+        target.ẋ,
+        target.ẏ,
     )
 end
 
