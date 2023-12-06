@@ -2,6 +2,8 @@ function render(m::POMDP)
     return render(m, NamedTuple())
 end
 
+filter_colors = distinguishable_colors(PARAMS["n_particles"])
+
 function circleShape(h, k, r)
     θ = LinRange(0, 2π, 500)
     return h .+ r * sin.(θ), k .+ r * cos.(θ)
@@ -20,6 +22,7 @@ function POMDPTools.render(pomdp::FlatPOMDP, step)
         plot!(
             plt,
             [(particle.x, particle.y) for particle in filter.particles];
+            markercolor=filter_colors[filter.id],
             markeralpha=0.2,
             markerstrokewidth=0,
             seriestype=:scatter,
@@ -51,15 +54,6 @@ function POMDPTools.render(pomdp::FlatPOMDP, step)
     )
     plot!(plt, beam; fillcolor=:red, fillalpha=0.5)
 
-    # Add targets
-    plot!(
-        plt,
-        [(target.x, target.y) for target in step.s.targets];
-        markercolor=:blue,
-        markershape=:xcross,
-        seriestype=:scatter,
-    )
-
     # Plot observations
     if !isempty(step.o)
         plot!(
@@ -68,10 +62,21 @@ function POMDPTools.render(pomdp::FlatPOMDP, step)
             seriestype=:scatter,
             markershape=:xcross,
             markercolor=:red,
-            markersize=10,
+            markersize=25,
             markerstrokewidth=5,
+            markerstrokecolor=:black,
         )
     end
+
+    # Add targets
+    plot!(
+        plt,
+        [(target.x, target.y) for target in step.s.targets];
+        markercolor=:blue,
+        markershape=:xcross,
+        markersize=10,
+        seriestype=:scatter,
+    )
 
     return plt
 end
