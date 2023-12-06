@@ -1,7 +1,3 @@
-# Note: fig from "fully illuminated guess", nothing to do with FIB, I'll probably rename due to similarity
-
-struct FigFilterSolver <: Solver end
-
 struct WeightedParticle
     x::Float32
     y::Float32
@@ -12,7 +8,6 @@ end
 
 struct SingleFilter
     id::Int32
-    # particles::SVector{PARAMS["n_particles"],WeightedParticle}
     particles::Vector{WeightedParticle}
     last_x::Float32
     last_y::Float32
@@ -74,7 +69,7 @@ end
 function initialize_filter(obs)
     x = obs.r * cos(obs.θ)
     y = obs.r * sin(obs.θ)
-    #ẋ = obs.v * cos(obs.θ) #TODO: does this check out? Should these maybe just be zero?
+    #ẋ = obs.v * cos(obs.θ) 
     #ẏ = obs.v * sin(obs.θ)
     ẋ = 0
     ẏ = 0
@@ -108,22 +103,12 @@ function low_variance_resampler(filter::SingleFilter)
     return SingleFilter(filter.id, ps, filter.last_x, filter.last_y, filter.last_t)
 end
 
-function POMDPs.solve(::FigFilterSolver, pomdp::POMDP)
-    up = MultiFilterUpdater(pomdp.rng)
-    return RandomPolicy(pomdp.rng, pomdp, up)
-end
-
 struct MultiFilterUpdater <: POMDPs.Updater
     rng::AbstractRNG
-    # dynamics(x, u, rng) = x + u + randn(rng)
-    # y_likelihood(x_previous, u, x, y) = pdf(Normal(), y - x)
-    # model = ParticleFilterModel{Float32}(dynamics, y_likelihood)
-    # pf = BootstrapFilter(model, 10)
 end
 
 function POMDPs.initialize_belief(up::MultiFilterUpdater, d)
-    # TODO: think about random particles everywhere?
-    return SingleFilter[] # Empty for now
+    return SingleFilter[]
 end
 
 function POMDPs.update(up::MultiFilterUpdater, belief_old, action, observation)

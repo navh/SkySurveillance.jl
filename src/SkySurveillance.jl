@@ -50,24 +50,39 @@ println("-------------------- end params '$(ARGS[1])'")
 # end
 
 include("Flat_POMDP/flat_pomdp.jl")
-include("Flat_POMDP/solver.jl")
+include("Flat_POMDP/updater.jl")
+include("Flat_POMDP/solver_random.jl")
 include("Flat_POMDP/visualizations.jl")
 
 run_time = format(now(), "YYYYmmdd-HHMMSS-sss")
 @info "Run: $(run_time)"
 
+mkpath(PARAMS["log_path"])
+
 rng = Xoshiro(PARAMS["seed"])
 pomdp = FlatPOMDP(; rng=rng)
 
-solver = FigFilterSolver()
+solver = RandomMultiFilter()
 policy = solve(solver, pomdp)
 
+hr = HistoryRecorder(; max_steps=PARAMS["animation_steps"])
+history = simulate(hr, pomdp, policy)
+
 if PARAMS["render"]
-    anim = @animate for step in
-                        stepthrough(pomdp, policy; max_steps=PARAMS["animation_steps"])
+    anim = @animate for step in eachstep(history)
         POMDPTools.render(pomdp, step)
     end
+    mkpath(PARAMS["video_path"])
     mov(anim, "$(PARAMS["video_path"])$(run_time).mov"; loop=1)
+end
+
+rewards = [reward(pomdp, step.s, step.b) for step in eachstep(history)]
+
+mkpath(PARAMS["log_path"])
+open("$(PARAMS["log_path"])$(run_time).txt", "w") do f
+    for i in rewards
+        println(f, i)
+    end
 end
 
 end

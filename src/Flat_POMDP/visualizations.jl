@@ -25,7 +25,7 @@ function POMDPTools.render(pomdp::FlatPOMDP, step)
             plt,
             [(particle.x, particle.y) for particle in filter.particles];
             markercolor=filter_colors[filter.id],
-            markeralpha=0.2,
+            markeralpha=0.3,
             markerstrokewidth=0,
             seriestype=:scatter,
         )
@@ -87,7 +87,7 @@ function POMDPTools.render(pomdp::FlatPOMDP, step)
         markercolor=:gray,
         markershape=:xcross,
         markeralpha=[
-            max(0.15, 1 + target.appears_at_t / 5) for target in invisible_targets
+            max(0.15, 1 + target.appears_at_t / 8) for target in invisible_targets
         ],
         markersize=10,
         seriestype=:scatter,

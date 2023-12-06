@@ -6,6 +6,9 @@ render = true
 animation_steps = 1000
 video_path = "./animations/"
 
+log_path = "./logs/"
+figure_path = "./figures/"
+
 search_strategy = "random" # one of ["random","sweep"]
 
 # Modelling Parameters

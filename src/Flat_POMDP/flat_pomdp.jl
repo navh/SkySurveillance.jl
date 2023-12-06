@@ -1,4 +1,4 @@
-export FlatPOMDP, FlatState, FlatBelief
+export FlatPOMDP, FlatState
 
 # Saccades - eyes scan slowly, cause invisible motorcycles
 
@@ -8,12 +8,6 @@ export FlatPOMDP, FlatState, FlatBelief
 
 beamwidth_rad::Float32 = PARAMS["beamwidth_degrees"] * π / 360
 
-# RANGE_BINS = 30  # Ravi had mentioned seeing a 600 bin example # Range Cells
-# AZIMUTH_BINS = 30 #  some factors of 360 are 18, 20, 24, 30, 36, 40, 45, 60, 72, 90, 120, 180
-
-# RANGE_SLICE_DEPTH = (PARAMS["radar_max_range_meters"] - PARAMS["radar_min_range_meters"]) / RANGE_BINS
-# AZIMUTH_SLICE_WIDTH = 2π / AZIMUTH_BINS
-
 XY_MAX_METERS::Float32 = PARAMS["radar_max_range_meters"]
 XY_MIN_METERS::Float32 = -1 * PARAMS["radar_max_range_meters"]
 XY_BIN_WIDTH::Float32 = (XY_MAX_METERS - XY_MIN_METERS) / PARAMS["xy_bins"]
@@ -22,6 +16,7 @@ DWELL_TIME_SECONDS::Float32 = PARAMS["dwell_time_seconds"] # ∈ [10ms,40ms] # f
 TARGET_VELOCITY_MAX_METERS_PER_SECOND::Float32 = PARAMS["target_velocity_max_meters_per_second"] # rounded up F-22 top speed is 700m/s
 
 target_reappearing_distribution = Uniform(-50, 0)
+target_reappearing_distribution = Uniform(-0.001, 0)
 
 struct Target
     id::Int32
@@ -63,11 +58,6 @@ function POMDPs.isterminal(pomdp::FlatPOMDP, s::FlatState)
     end
     return true
 end
-
-# # I've got no idea how to implement this, I don't think I need it
-# function POMDPs.isterminal(pomdp::FlatPOMDP, b::FlatBelief)
-#      return isterminal(pomdp, rand(pomdp.rng, pomdp, b))
-# end
 
 function POMDPs.gen(
     pomdp::FlatPOMDP, s::FlatState, a::FlatAction, rng::RNG
@@ -124,11 +114,6 @@ function POMDPs.actions(pomdp::FlatPOMDP)
     return Uniform{Float32}(0, 1)
 end
 
-# function POMDPs.action(p::RandomPolicy, b)
-#     possible_actions = POMDPs.actions(p.problem, b)
-#     return rand(p.problem.pomdp.rng, possible_actions)
-# end
-
 # observations 
 
 function action_to_rad(action::FlatAction)
@@ -141,11 +126,7 @@ function target_spotted(target::Target, action::FlatAction, beamwidth::Float32)
         return false
     end
     target_θ = atan(target.y, target.x)
-    # TODO: check this
-    # (0.530473384623918, Main.SkySurveillance.TargetObservation[Main.SkySurveillance.TargetObservation(336190.8852956795, -2.998197791214231, -25.437627674086766, 0.0)])
-    # (0.41165095808460195, Main.SkySurveillance.TargetObservation[])
-    # (0.010539030976806085, Main.SkySurveillance.TargetObservation[Main.SkySurveillance.TargetObservation(336187.83836025285, -2.99801559599274, -25.34462901551724, 0.0)])
-    # (0.3336810511625745, Main.SkySurveillance.TargetObservation[])
+    # TODO: check this around -pi to pi transition
     #return abs((target_θ - action_to_rad(action)) % π) < beamwidth # atan ∈ [-π,π] 
     return abs((target_θ - action_to_rad(action))) < beamwidth # TODO: tried to fix the 180 prob, unsure about new issues around 0-1 transition?
 end
@@ -239,14 +220,45 @@ function POMDPs.reward(pomdp::FlatPOMDP, s::FlatState, a::FlatAction, sp::FlatSt
 end
 
 function POMDPs.reward(pomdp::FlatPOMDP, s::FlatState, b)
-    if isterminal(pomdp, s)
-        return 0
-    end
+    # if isterminal(pomdp, s)
+    #     return 0
+    # end
+    #
+    # visible_targets = filter(target -> target.appears_at_t >= 0, s.targets)
+    #
+    # tracked_targets = filter(
+    #     target -> target.id ∈ [filter.id for filter in b], visible_targets
+    # )
+    # untracked_targets = filter(
+    #     target -> target.id ∉ [filter.id for filter in b], visible_targets
+    # )
+    #
+    score = 0
 
-    # sum of target reward?
-    # pomdp.sum_targets_observed
-    # I really still feel that this should be the reward distance reduction
-    return 0
+    for target in s.targets
+        if target.appears_at_t >= 0
+            filter_index = findfirst(x -> x.id == target.id, b)
+            # change to spread of the particle filter 
+            if filter_index === nothing
+                score += score_untracked_target(target)
+            else
+                score += score_tracked_target(target, b[filter_index])
+            end
+        end
+    end
+    return -score # NOTE: Negation of the scare
+end
+
+function score_tracked_target(target, filter)
+    # Basically RMS 
+    return sum([
+        √((target.x - particle.x)^2 + (target.y - particle.y)^2) for
+        particle in filter.particles
+    ]) / length(filter.particles)
+end
+
+function score_untracked_target(target)
+    return target.appears_at_t
 end
 
 # policies
@@ -254,3 +266,10 @@ function random_policy(pomdp, b)
     possible_actions = POMDPs.actions(pomdp, b)
     return rand(pomdp.rng, possible_actions)
 end
+
+# SAC 
+
+# characteristics of the clouds
+# mean and standard deviation, is particle cloud, variance
+# give inputs as means and std deviations of clouds, locations of unseen targets.
+# mean and standard deviations, of the clouds.
