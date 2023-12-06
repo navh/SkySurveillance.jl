@@ -171,28 +171,6 @@ function target_spotted(target::Target, action::FlatAction, beamwidth::Float32)
     return abs((target_θ - action_to_rad(action))) < beamwidth # TODO: tried to fix the 180 prob, unsure about new issues around 0-1 transition?
 end
 
-# TODO: delete the following
-# function real_occupancy(s::FlatState)
-#     occupancy = zeros(CellType, PARAMS["xy_bins"], PARAMS["xy_bins"])
-#     for target in s.targets
-#         x_bin = ceil(
-#             Int64,
-#             (target.x - XY_MIN_METERS) / (XY_MAX_METERS - XY_MIN_METERS) *
-#             PARAMS["xy_bins"],
-#         )
-#         y_bin = ceil(
-#             Int64,
-#             (target.y - XY_MIN_METERS) / (XY_MAX_METERS - XY_MIN_METERS) *
-#             PARAMS["xy_bins"],
-#         )
-#         if 0 < x_bin <= PARAMS["xy_bins"] && 0 < y_bin <= PARAMS["xy_bins"]
-#             occupancy[y_bin, x_bin] = 1
-#         end
-#     end
-#     return occupancy
-#     # return SVector{length(Cells),Float32}(occupancy) #Hack to make it play nice with the model
-# end
-
 function target_observation(target)
     # Sensor is at origin so this is all quite simple
     r = √(target.x^2 + target.y^2)
