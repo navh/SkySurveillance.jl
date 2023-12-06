@@ -2,7 +2,9 @@ function render(m::POMDP)
     return render(m, NamedTuple())
 end
 
-filter_colors = distinguishable_colors(PARAMS["n_particles"])
+filter_colors = distinguishable_colors(
+    PARAMS["n_particles"], [RGB(1, 1, 1), RGB(0, 0, 0)]; dropseed=true
+)
 
 function circleShape(h, k, r)
     θ = LinRange(0, 2π, 500)
@@ -69,11 +71,24 @@ function POMDPTools.render(pomdp::FlatPOMDP, step)
     end
 
     # Add targets
+    visible_targets = filter(target -> target.appears_at_t >= 0, step.s.targets)
+    invisible_targets = filter(target -> target.appears_at_t < 0, step.s.targets)
     plot!(
         plt,
-        [(target.x, target.y) for target in step.s.targets];
+        [(target.x, target.y) for target in visible_targets];
         markercolor=:blue,
         markershape=:xcross,
+        markersize=10,
+        seriestype=:scatter,
+    )
+    plot!(
+        plt,
+        [(target.x, target.y) for target in invisible_targets];
+        markercolor=:gray,
+        markershape=:xcross,
+        markeralpha=[
+            max(0.15, 1 + target.appears_at_t / 5) for target in invisible_targets
+        ],
         markersize=10,
         seriestype=:scatter,
     )

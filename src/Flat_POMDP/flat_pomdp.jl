@@ -21,14 +21,11 @@ XY_BIN_WIDTH::Float32 = (XY_MAX_METERS - XY_MIN_METERS) / PARAMS["xy_bins"]
 DWELL_TIME_SECONDS::Float32 = PARAMS["dwell_time_seconds"] # ∈ [10ms,40ms] # from Jack
 TARGET_VELOCITY_MAX_METERS_PER_SECOND::Float32 = PARAMS["target_velocity_max_meters_per_second"] # rounded up F-22 top speed is 700m/s
 
-#OBSERVATION_BUFFER_SIZE = 1000
-
-CellType = Float32
-#Cells= SMatrix{RANGE_BINS,AZIMUTH_BINS,CellType}
-Cells = SMatrix{PARAMS["xy_bins"],PARAMS["xy_bins"],CellType}
+target_reappearing_distribution = Uniform(-50, 0)
 
 struct Target
     id::Int32
+    appears_at_t::Float32
     x::Float32
     y::Float32
     ẋ::Float32
@@ -37,16 +34,6 @@ end
 
 struct FlatState
     targets::SVector{PARAMS["number_of_targets"],Target}
-end
-
-function update_target(target::Target, time::Float32, observed::Bool)
-    return Target(
-        target.id,
-        target.x + target.ẋ * time,
-        target.y + target.ẏ * time,
-        target.ẋ,
-        target.ẏ,
-    )
 end
 
 struct TargetObservation
@@ -61,10 +48,6 @@ FlatObservation = Vector{TargetObservation}
 FlatAction = Float64 # Must be left 64 due to rand(uniform(f32,f32)) unwaveringly returning f64
 # To play nice with MCTS should I just pick wedges?
 # Eventually I'd like Tuple{Float32,Float32,Float32} # azimuth, beamwidth, dwell_time
-
-struct FlatBelief
-    occupancy_grid::Cells
-end
 
 @with_kw mutable struct FlatPOMDP <: POMDP{FlatState,FlatAction,FlatObservation} # POMDP{State, Action, Observation}
     rng::AbstractRNG
@@ -120,8 +103,10 @@ function initialize_random_targets(rng::RNG)::FlatState where {RNG<:AbstractRNG}
         ),
         PARAMS["number_of_targets"],
     )
+    random_times = rand(rng, target_reappearing_distribution, PARAMS["number_of_targets"])
+    random_times[1] = 0 # Make at least one visible right first step
     initial_targets = [
-        Target(i, xs[i], ys[i], x_velocities[i], y_velocities[i]) for
+        Target(i, random_times[i], xs[i], ys[i], x_velocities[i], y_velocities[i]) for
         i in 1:PARAMS["number_of_targets"]
     ]
     return FlatState(initial_targets)
@@ -139,16 +124,10 @@ function POMDPs.actions(pomdp::FlatPOMDP)
     return Uniform{Float32}(0, 1)
 end
 
-"""
-    POMDPs.action(p::RandomPolicy, b::FlatBelief)
-
-A selection [0,1] representing where to look around a circle.
-0 is west, 0.25 is north, 0.5 is east, 0.75 is south, 1 is west again.
-"""
-function POMDPs.action(p::RandomPolicy, b::FlatBelief)
-    possible_actions = POMDPs.actions(p.problem, b)
-    return rand(p.problem.pomdp.rng, possible_actions)
-end
+# function POMDPs.action(p::RandomPolicy, b)
+#     possible_actions = POMDPs.actions(p.problem, b)
+#     return rand(p.problem.pomdp.rng, possible_actions)
+# end
 
 # observations 
 
@@ -202,12 +181,12 @@ function illumination_observation(action::FlatAction, state::FlatState)
 
     observations = TargetObservation[]
 
-    for target in state.targets
-        if target_spotted(target, action, beamwidth_rad)
-            push!(observations, target_observation(target))
-        end
-    end
-    return observations
+    observed_targets = filter(
+        target -> target.appears_at_t >= 0 && target_spotted(target, action, beamwidth_rad),
+        state.targets,
+    )
+
+    return [target_observation(t) for t in observed_targets]
 end
 
 function generate_o(
@@ -226,6 +205,7 @@ end
 function update_target(target::Target, time)
     return Target(
         target.id,
+        target.appears_at_t + time,
         target.x + target.ẋ * time,
         target.y + target.ẏ * time,
         target.ẋ,
@@ -247,15 +227,6 @@ end
 
 ### rewards 
 
-function belief_reward(pomdp::FlatPOMDP, b::FlatBelief, a::FlatAction, bp::FlatBelief)
-    if isterminal(pomdp, b)
-        return 0
-    end
-
-    # reward distance reduction
-    return 0
-end
-
 function POMDPs.reward(pomdp::FlatPOMDP, s::FlatState, a::FlatAction, sp::FlatState)
     if isterminal(pomdp, s)
         return 0
@@ -267,7 +238,7 @@ function POMDPs.reward(pomdp::FlatPOMDP, s::FlatState, a::FlatAction, sp::FlatSt
     return 0
 end
 
-function POMDPs.reward(pomdp::FlatPOMDP, s::FlatState, b::FlatBelief)
+function POMDPs.reward(pomdp::FlatPOMDP, s::FlatState, b)
     if isterminal(pomdp, s)
         return 0
     end

@@ -29,7 +29,7 @@ using POMDPTools:
     stepthrough
 using POMDPs: POMDP, POMDPs, Solver, Updater, discount, isterminal, reward, simulate, solve
 using Parameters: @with_kw
-using Plots: @animate, Plots, Shape, distinguishable_colors, heatmap!, mov, plot, plot!
+using Plots: @animate, Plots, RGB, Shape, distinguishable_colors, heatmap!, mov, plot, plot!
 using Random: AbstractRNG, Xoshiro
 using StaticArrays: @SMatrix, @SVector, SA, SMatrix, SVector
 using TOML: TOML
