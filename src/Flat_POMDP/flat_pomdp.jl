@@ -8,7 +8,6 @@ beamwidth_rad::Float32 = PARAMS["beamwidth_degrees"] * π / 360
 
 XY_MAX_METERS::Float32 = PARAMS["radar_max_range_meters"]
 XY_MIN_METERS::Float32 = -1 * PARAMS["radar_max_range_meters"]
-XY_BIN_WIDTH::Float32 = (XY_MAX_METERS - XY_MIN_METERS) / PARAMS["xy_bins"]
 
 DWELL_TIME_SECONDS::Float32 = PARAMS["dwell_time_seconds"] # ∈ [10ms,40ms] # from Jack
 TARGET_VELOCITY_MAX_METERS_PER_SECOND::Float32 = PARAMS["target_velocity_max_meters_per_second"] # rounded up F-22 top speed is 700m/s
