@@ -12,8 +12,8 @@ XY_MIN_METERS::Float32 = -1 * PARAMS["radar_max_range_meters"]
 DWELL_TIME_SECONDS::Float32 = PARAMS["dwell_time_seconds"] # ∈ [10ms,40ms] # from Jack
 TARGET_VELOCITY_MAX_METERS_PER_SECOND::Float32 = PARAMS["target_velocity_max_meters_per_second"] # rounded up F-22 top speed is 700m/s
 
-target_reappearing_distribution = Uniform(-50, 0)
-target_reappearing_distribution = Uniform(-0.001, 0)
+# target_reappearing_distribution = Uniform(-50, 0)
+target_reappearing_distribution = Deterministic(0)
 
 DISCOUNT = 0.95 # was 1.0
 

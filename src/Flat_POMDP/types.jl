@@ -47,4 +47,4 @@ struct UpdaterState
     belief_state::MultiFilterBelief
 end
 
-UpdaterObservation = SVector{Float32,2 * PARAMS["number_of_targets"]}
+UpdaterObservation = SVector{2 * PARAMS["number_of_targets"],Float32}

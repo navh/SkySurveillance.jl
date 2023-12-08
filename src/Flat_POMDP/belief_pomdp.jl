@@ -14,6 +14,10 @@ function POMDPs.isterminal(pomdp::BeliefPOMDP, s::UpdaterState)
     return isterminal(pomdp.underlying_pomdp, s.underlying_state)
 end
 
+function POMDPs.initialobs(pomdp::BeliefPOMDP, s::UpdaterState)
+    return Deterministic(zeros(SVector{2 * PARAMS["number_of_targets"]}))
+end
+
 function POMDPs.gen(
     pomdp::BeliefPOMDP, s::UpdaterState, a::FlatAction, rng::RNG
 ) where {RNG<:AbstractRNG}
