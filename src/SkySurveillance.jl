@@ -2,13 +2,13 @@ module SkySurveillance
 
 using Dates: format, now
 using Distributions: Normal, Uniform
-using StatsBase: mean, var
 using POMDPTools:
     Deterministic, HistoryRecorder, POMDPTools, RandomPolicy, RandomSolver, eachstep
 using POMDPs: POMDP, POMDPs, Solver, Updater, discount, isterminal, reward, simulate, solve
 using Plots: @animate, Plots, RGB, Shape, distinguishable_colors, mov, plot, plot!
 using Random: AbstractRNG, Xoshiro
 using StaticArrays: SVector
+using Statistics: mean, var
 using TOML: parse, parsefile
 
 if isempty(ARGS)
