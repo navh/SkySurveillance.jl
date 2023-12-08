@@ -1,5 +1,3 @@
-export FlatPOMDP, FlatState
-
 # Saccades - eyes scan slowly, cause invisible motorcycles
 
 # TODO: add dwell time 10e-3 to 50e-3 for 10-50ms to action space.
@@ -18,35 +16,11 @@ TARGET_VELOCITY_MAX_METERS_PER_SECOND::Float32 = PARAMS["target_velocity_max_met
 target_reappearing_distribution = Uniform(-50, 0)
 target_reappearing_distribution = Uniform(-0.001, 0)
 
-struct Target
-    id::Int32
-    appears_at_t::Float32
-    x::Float32
-    y::Float32
-    ẋ::Float32
-    ẏ::Float32
-end
+DISCOUNT = 0.95 # was 1.0
 
-struct FlatState
-    targets::SVector{PARAMS["number_of_targets"],Target}
-end
-
-struct TargetObservation
-    id::Int32  # unique target id
-    r::Float32 # range (meters)
-    θ::Float32 # azimuth (radians)
-    v::Float32 # radial velocity (meters/second)
-end
-
-FlatObservation = Vector{TargetObservation}
-
-FlatAction = Float64 # Must be left 64 due to rand(uniform(f32,f32)) unwaveringly returning f64
-# To play nice with MCTS should I just pick wedges?
-# Eventually I'd like Tuple{Float32,Float32,Float32} # azimuth, beamwidth, dwell_time
-
-@with_kw mutable struct FlatPOMDP <: POMDP{FlatState,FlatAction,FlatObservation} # POMDP{State, Action, Observation}
+mutable struct FlatPOMDP <: POMDP{FlatState,FlatAction,FlatObservation} # POMDP{State, Action, Observation}
     rng::AbstractRNG
-    discount::Float32 = 0.95 # was 1.0
+    discount::Float32
 end
 
 function POMDPs.isterminal(pomdp::FlatPOMDP, s::FlatState)
@@ -216,10 +190,11 @@ function POMDPs.reward(pomdp::FlatPOMDP, s::FlatState, a::FlatAction, sp::FlatSt
     # sum of target reward?
     # pomdp.sum_targets_observed
     # I really still feel that this should be the reward distance reduction
+    # why have I done this to myself. why can't I just access b in here. 
     return 0
 end
 
-function POMDPs.reward(pomdp::FlatPOMDP, s::FlatState, b)
+function POMDPs.reward(pomdp::FlatPOMDP, s::FlatState, b::MultiFilterBelief)
     # if isterminal(pomdp, s)
     #     return 0
     # end
@@ -246,7 +221,7 @@ function POMDPs.reward(pomdp::FlatPOMDP, s::FlatState, b)
             end
         end
     end
-    return -score # NOTE: Negation of the scare
+    return -score # NOTE: Negation of the score
 end
 
 function score_tracked_target(target, filter)
@@ -258,18 +233,5 @@ function score_tracked_target(target, filter)
 end
 
 function score_untracked_target(target)
-    return target.appears_at_t
+    return target.appears_at_t * 1e3
 end
-
-# policies
-function random_policy(pomdp, b)
-    possible_actions = POMDPs.actions(pomdp, b)
-    return rand(pomdp.rng, possible_actions)
-end
-
-# SAC 
-
-# characteristics of the clouds
-# mean and standard deviation, is particle cloud, variance
-# give inputs as means and std deviations of clouds, locations of unseen targets.
-# mean and standard deviations, of the clouds.

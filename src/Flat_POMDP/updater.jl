@@ -1,19 +1,3 @@
-struct WeightedParticle
-    x::Float32
-    y::Float32
-    ẋ::Float32
-    ẏ::Float32
-    w::Float32
-end
-
-struct SingleFilter
-    id::Int32
-    particles::Vector{WeightedParticle}
-    last_x::Float32
-    last_y::Float32
-    last_t::Float32
-end
-
 function propagate_particle(p::WeightedParticle, time::Float64)
     return WeightedParticle(
         p.x + p.ẋ * time + rand(Normal(0.0, 200.0)),

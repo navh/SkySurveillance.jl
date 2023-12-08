@@ -2,6 +2,10 @@ function render(m::POMDP)
     return render(m, NamedTuple())
 end
 
+function POMDPTools.render(pomdp::FlatPOMDP, step::NamedTuple)
+    return draw_the_world(step.s, step.b, step.a, step.o)
+end
+
 filter_colors = distinguishable_colors(
     PARAMS["n_particles"], [RGB(1, 1, 1), RGB(0, 0, 0)]; dropseed=true
 )
@@ -11,7 +15,7 @@ function circleShape(h, k, r)
     return h .+ r * sin.(θ), k .+ r * cos.(θ)
 end
 
-function POMDPTools.render(pomdp::FlatPOMDP, step)
+function draw_the_world(s, b, a, o)
     plt = plot(;
         axis=nothing,
         showaxis=false,
@@ -20,7 +24,7 @@ function POMDPTools.render(pomdp::FlatPOMDP, step)
         ylims=(-XY_MAX_METERS, XY_MAX_METERS),
     )
 
-    for filter in step.b
+    for filter in b
         plot!(
             plt,
             [(particle.x, particle.y) for particle in filter.particles];
@@ -45,8 +49,8 @@ function POMDPTools.render(pomdp::FlatPOMDP, step)
     )
 
     # Draw action beam
-    left = action_to_rad(step.a) - beamwidth_rad
-    right = action_to_rad(step.a) + beamwidth_rad
+    left = action_to_rad(a) - beamwidth_rad
+    right = action_to_rad(a) + beamwidth_rad
     beam = Shape(
         [
             (0.0, 0.0)
@@ -57,10 +61,10 @@ function POMDPTools.render(pomdp::FlatPOMDP, step)
     plot!(plt, beam; fillcolor=:red, fillalpha=0.5)
 
     # Plot observations
-    if !isempty(step.o)
+    if !isempty(o)
         plot!(
             plt,
-            [(target.r * cos(target.θ), target.r * sin(target.θ)) for target in step.o];
+            [(target.r * cos(target.θ), target.r * sin(target.θ)) for target in o];
             seriestype=:scatter,
             markershape=:xcross,
             markercolor=:red,
@@ -71,8 +75,8 @@ function POMDPTools.render(pomdp::FlatPOMDP, step)
     end
 
     # Add targets
-    visible_targets = filter(target -> target.appears_at_t >= 0, step.s.targets)
-    invisible_targets = filter(target -> target.appears_at_t < 0, step.s.targets)
+    visible_targets = filter(target -> target.appears_at_t >= 0, s.targets)
+    invisible_targets = filter(target -> target.appears_at_t < 0, s.targets)
     plot!(
         plt,
         [(target.x, target.y) for target in visible_targets];
