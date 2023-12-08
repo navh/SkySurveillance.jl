@@ -26,10 +26,38 @@ using Random: AbstractRNG, Xoshiro, shuffle
 using StaticArrays: @SMatrix, @SVector, SA, SMatrix, SVector
 using TOML: TOML
 
-PARAMS = TOML.parsefile(ARGS[1])
-println("-------------------- begin params '$(ARGS[1])'")
-TOML.print(PARAMS)
-println("-------------------- end params '$(ARGS[1])'")
+if isempty(ARGS)
+    PARAMS = TOML.parse("""
+seed = 42
+
+render = true
+animation_steps = 1000
+video_path = "./animations/"
+
+log_path = "./logs/"
+figure_path = "./figures/"
+
+search_strategy = "random" # one of ["random","sweep"]
+
+# Modelling Parameters
+number_of_targets = 10
+beamwidth_degrees = 10
+radar_min_range_meters = 500
+radar_max_range_meters = 500_000
+xy_bins = 20
+dwell_time_seconds = 200e-3
+target_velocity_max_meters_per_second = 700
+include_no_observations = true
+
+# Filter Parameters
+n_particles = 100
+""")
+else
+    PARAMS = TOML.parsefile(ARGS[1])
+    println("-------------------- begin params '$(ARGS[1])'")
+    TOML.print(PARAMS)
+    println("-------------------- end params '$(ARGS[1])'")
+end
 
 # if PARAMS["use_gpu"]
 #     if PARAMS["gpu_type"] == "CUDA"
@@ -42,19 +70,11 @@ println("-------------------- end params '$(ARGS[1])'")
 # end
 #
 
-# include("utils/replay_buffer.jl")
-# include("utils/config_parser.jl")
-# include("utils/logger.jl")
-# include("utils/multi_thread_env.jl")
-
 include("Flat_POMDP/types.jl")
 include("Flat_POMDP/flat_pomdp.jl")
 include("Flat_POMDP/belief_pomdp.jl")
 include("Flat_POMDP/updater.jl")
 include("Flat_POMDP/solver_random.jl")
-# include("Flat_POMDP/solver_sac.jl")
-# include("Flat_POMDP/solver_ppo.jl")
-# include("Flat_POMDP/belief_mdp.jl")
 include("Flat_POMDP/visualizations.jl")
 
 run_time = format(now(), "YYYYmmdd-HHMMSS-sss")
