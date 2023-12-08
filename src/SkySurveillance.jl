@@ -5,13 +5,13 @@ using CommonRLInterface: AbstractEnv
 using Dates: format, now
 using Distributions: Normal, Uniform
 using Flux
-using Flux: params
+using Flux: glorot_uniform
 using IntervalSets
 using POMDPTools:
     Deterministic, HistoryRecorder, POMDPTools, RandomPolicy, RandomSolver, eachstep
 using POMDPs: POMDP, POMDPs, Solver, Updater, discount, isterminal, reward, simulate, solve
 using Plots: @animate, Plots, RGB, Shape, distinguishable_colors, mov, plot, plot!
-using Random: AbstractRNG, Xoshiro
+using Random: AbstractRNG, Xoshiro, GLOBAL_RNG
 using ReinforcementLearning
 using StaticArrays: SVector
 using Statistics: mean, var
