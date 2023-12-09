@@ -5,16 +5,18 @@ using CommonRLInterface: AbstractEnv
 using Dates: format, now
 using Distributions: Normal, Uniform
 using Flux
-using Flux: glorot_uniform
+using Flux: glorot_uniform, mse
 using IntervalSets
+using POMDPTools.BeliefUpdaters: NothingUpdater
+using POMDPTools.Simulators: Sim, run_parallel, stepthrough
 using POMDPTools:
     Deterministic, HistoryRecorder, POMDPTools, RandomPolicy, RandomSolver, eachstep
 using POMDPs: POMDP, POMDPs, Solver, Updater, discount, isterminal, reward, simulate, solve
 using Plots: @animate, Plots, RGB, Shape, distinguishable_colors, mov, plot, plot!
-using Random: AbstractRNG, Xoshiro, GLOBAL_RNG
-using ReinforcementLearning
+using Random: AbstractRNG, Xoshiro
 using StaticArrays: SVector
 using Statistics: mean, var
+using Random: default_rng
 using TOML: parse, parsefile
 
 if isempty(ARGS)
@@ -43,6 +45,7 @@ include("Flat_POMDP/flat_pomdp.jl")
 include("Flat_POMDP/belief_pomdp.jl")
 include("Flat_POMDP/updater.jl")
 include("Flat_POMDP/solver_random.jl")
+include("Flat_POMDP/solver_simple_net.jl")
 include("Flat_POMDP/visualizations.jl")
 
 run_time = format(now(), "YYYYmmdd-HHMMSS-sss")
@@ -55,105 +58,10 @@ child_pomdp = FlatPOMDP(rng, DISCOUNT)
 updater = MultiFilterUpdater(child_pomdp.rng)
 pomdp = BeliefPOMDP(child_pomdp.rng, child_pomdp, updater)
 
-function RL.Experiment(
-    ::Val{:JuliaRL},
-    ::Val{:SAC},
-    ::Val{:BeliefPOMDP},
-    ::Nothing;
-    save_dir=nothing,
-    seed=PARAMS["seed"],
-)
-    rng = Xoshiro(seed)
-    env = convert(AbstractEnv, pomdp)
-    # action_dims = inner_env.n_actions
-    action_dims = 1
-    # A = action_space(inner_env)
-    # low = A.left
-    # high = A.right
-    low = 0.0
-    high = 0.0
-    # ns = length(state(inner_env))
-    ns = 2 * PARAMS["number_of_targets"]
-    na = 1
-
-    ## I don't think I need this as all my actions are always legal
-    # env = ActionTransformedEnv(
-    #     inner_env; action_mapping=x -> low + (x[1] + 1) * 0.5 * (high - low)
-    # )
-    init = glorot_uniform(rng)
-
-    function create_policy_net()
-        return gpu(
-            NeuralNetworkApproximator(;
-                model=GaussianNetwork(;
-                    pre=Chain(
-                        Dense(ns, 30, relu; init=init), Dense(30, 30, relu; init=init)
-                    ),
-                    μ=Chain(Dense(30, na; init=init)),
-                    logσ=Chain(
-                        Dense(
-                            30, na, x -> clamp(x, typeof(x)(-10), typeof(x)(2)); init=init
-                        ),
-                    ),
-                ),
-                optimizer=Adam(0.003),
-            ),
-        )
-    end
-
-    function create_q_net()
-        return gpu(
-            NeuralNetworkApproximator(;
-                model=Chain(
-                    Dense(ns + na, 30, relu; init=init),
-                    Dense(30, 30, relu; init=init),
-                    Dense(30, 1; init=init),
-                ),
-                optimizer=Adam(0.003),
-            ),
-        )
-    end
-
-    agent = Agent(;
-        policy=SACPolicy(;
-            policy=create_policy_net(),
-            qnetwork1=create_q_net(),
-            qnetwork2=create_q_net(),
-            target_qnetwork1=create_q_net(),
-            target_qnetwork2=create_q_net(),
-            γ=0.99f0,
-            τ=0.005f0,
-            α=0.2f0,
-            batch_size=64,
-            start_steps=1000,
-            start_policy=RandomPolicy(pomdp; rng=rng),
-            update_after=1000,
-            update_freq=1,
-            automatic_entropy_tuning=true,
-            lr_alpha=0.003f0,
-            action_dims=action_dims,
-            rng=rng,
-            device_rng=CUDA.functional() ? CUDA.CURAND.RNG() : rng,
-        ),
-        trajectory=CircularArraySARTTrajectory(;
-            capacity=10000, state=Vector{Float32} => (ns,), action=Vector{Float32} => (na,)
-        ),
-    )
-
-    stop_condition = StopAfterStep(10_000; is_show_progress=!haskey(ENV, "CI"))
-    hook = TotalRewardPerEpisode()
-    return Experiment(agent, env, stop_condition, hook, "# Radar with SAC")
-end
-
-ex = E`JuliaRL_SAC_BeliefPOMDP`
-run(ex)
-plot(ex.hook.rewards)
-
-#### Animation begin 
-#
-# #solver = RandomMultiFilter()
-# solver = RandomSolver()
-# policy = solve(solver, pomdp)
+#solver = RandomMultiFilter()
+#solver = RandomSolver()
+solver = SimpleGreedySolver()
+policy = solve(solver, pomdp)
 #
 # hr = HistoryRecorder(; max_steps=PARAMS["animation_steps"])
 # history = simulate(hr, pomdp, policy)
@@ -174,8 +82,6 @@ plot(ex.hook.rewards)
 #         println(f, i)
 #     end
 # end
-#
-#### Animation end 
 
 #### Crux.jl experiment begin
 #
