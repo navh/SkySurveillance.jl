@@ -57,7 +57,6 @@ rng = Xoshiro(PARAMS["seed"])
 child_pomdp = FlatPOMDP(rng, DISCOUNT)
 updater = MultiFilterUpdater(child_pomdp.rng)
 pomdp = BeliefPOMDP(child_pomdp.rng, child_pomdp, updater)
-
 #solver = RandomMultiFilter()
 #solver = RandomSolver()
 solver = SimpleGreedySolver()

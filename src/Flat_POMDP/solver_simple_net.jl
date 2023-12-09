@@ -17,6 +17,10 @@ function POMDPs.solve(::SimpleGreedySolver, pomdp::POMDP)
 
     for _ in N_TRAIN_EPISODES
         i = 0
+        child_pomdp = FlatPOMDP(rng, DISCOUNT)
+        updater = MultiFilterUpdater(child_pomdp.rng)
+        pomdp = BeliefPOMDP(child_pomdp.rng, child_pomdp, updater)
+
         for (a, o, r) in stepthrough(
             pomdp,
             RandomPolicy(pomdp.rng, pomdp, NothingUpdater()),
