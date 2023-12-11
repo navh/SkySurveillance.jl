@@ -50,8 +50,12 @@ end
 ### states
 
 function initialize_random_targets(rng::RNG)::FlatState where {RNG<:AbstractRNG}
-    xs = rand(rng, Uniform(XY_MIN_METERS, XY_MAX_METERS), PARAMS["number_of_targets"])
-    ys = rand(rng, Uniform(XY_MIN_METERS, XY_MAX_METERS), PARAMS["number_of_targets"])
+    xs = rand(
+        rng, Uniform(XY_MIN_METERS * 0.8, XY_MAX_METERS * 0.8), PARAMS["number_of_targets"]
+    )
+    ys = rand(
+        rng, Uniform(XY_MIN_METERS * 0.8, XY_MAX_METERS * 0.8), PARAMS["number_of_targets"]
+    )
     x_velocities = rand(
         rng,
         Uniform(

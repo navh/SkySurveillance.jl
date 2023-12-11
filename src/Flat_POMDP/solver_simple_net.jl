@@ -1,11 +1,11 @@
 struct SimpleGreedySolver <: Solver end
 
-N_EPOCHS = 1
-N_TRAIN_EPISODES = 100
+N_EPOCHS = 20
+N_TRAIN_EPISODES = 500
 N_TEST_EPISODES = 10
 N_SKIP_FIRST_STEPS = 100
 N_STEPS_PER_EPISODE = 100
-MONTE_CARLO_ROLLOUTS = 10
+MONTE_CARLO_ROLLOUTS = 100
 
 ACTION_WIDTH = 1
 BELIEF_WIDTH = 2 * PARAMS["number_of_targets"]
@@ -79,6 +79,11 @@ end
 
 function monte_carlo_twig_search(model, observation, action_space)
     best_action = rand(action_space)
+
+    if sum(observation) == 0.0
+        return best_action
+    end
+
     best_estimate = model(action_observation(best_action, observation))
     for a in rand(action_space, MONTE_CARLO_ROLLOUTS)
         estimate = model(action_observation(a, observation))

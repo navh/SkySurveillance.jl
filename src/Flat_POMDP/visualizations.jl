@@ -19,7 +19,8 @@ function draw_the_world(s, b, a, o)
     plt = plot(;
         axis=nothing,
         showaxis=false,
-        size=(1920, 1080),
+        #size=(1920, 1080),
+        size=(500, 500),
         xlims=(-XY_MAX_METERS, XY_MAX_METERS),
         ylims=(-XY_MAX_METERS, XY_MAX_METERS),
     )
@@ -29,7 +30,7 @@ function draw_the_world(s, b, a, o)
             plt,
             [(particle.x, particle.y) for particle in filter.particles];
             markercolor=filter_colors[filter.id],
-            markeralpha=0.3,
+            markeralpha=0.1,
             markerstrokewidth=0,
             seriestype=:scatter,
         )
