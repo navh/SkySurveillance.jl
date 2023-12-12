@@ -53,10 +53,8 @@ end
 function initialize_filter(obs)
     x = obs.r * cos(obs.θ)
     y = obs.r * sin(obs.θ)
-    #ẋ = obs.v * cos(obs.θ) 
-    #ẏ = obs.v * sin(obs.θ)
-    ẋ = 0
-    ẏ = 0
+    ẋ = obs.v * cos(obs.θ)
+    ẏ = obs.v * sin(obs.θ)
     d = Normal(0.0, 25.0) # TODO: paramaterize at least σ? Ask ravi for a good theta? different d for r and v? Really comes from bandwidth, 3mhz, c/2b? +/- 25m. 1ghz radar, that would be 0.3% bandwidth. Really low?.
     ḋ = Normal(0.0, 100.0) # Some percent of range, really comes from PRF. Let's say PRF of 2khz, 100samples, v/λ, if λ is 50cm, so 6m/s.
     particles = [
