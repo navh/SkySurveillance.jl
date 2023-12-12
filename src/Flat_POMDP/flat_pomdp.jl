@@ -214,7 +214,8 @@ function POMDPs.reward(pomdp::FlatPOMDP, s::FlatState, b::MultiFilterBelief)
     score = 0
 
     for target in s.targets
-        if target.appears_at_t >= 0
+        if target.appears_at_t >= 0 &&
+            √(target.x^2 + target.y^2) <= PARAMS["radar_max_range_meters"]
             filter_index = findfirst(x -> x.id == target.id, b)
             # change to spread of the particle filter 
             if filter_index === nothing
