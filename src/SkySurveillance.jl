@@ -3,6 +3,7 @@ module SkySurveillance
 using CUDA
 using CommonRLInterface: AbstractEnv
 using Dates: format, now
+using JLD2
 using Distributions: Normal, Uniform
 using Flux
 using Flux: glorot_uniform, mse
@@ -13,7 +14,18 @@ using POMDPTools:
     Deterministic, HistoryRecorder, POMDPTools, RandomPolicy, RandomSolver, eachstep
 using POMDPs:
     POMDP, POMDPs, Policy, Solver, Updater, discount, isterminal, reward, simulate, solve
-using Plots: @animate, Plots, RGB, Shape, distinguishable_colors, mp4, plot, plot!, pdf
+using Plots:
+    @animate,
+    Plots,
+    RGB,
+    Shape,
+    distinguishable_colors,
+    mp4,
+    plot,
+    plot!,
+    pdf,
+    savefig,
+    pgfplotsx
 using Random: AbstractRNG, Xoshiro, default_rng
 using StaticArrays: SVector
 using Statistics: mean, var
@@ -21,12 +33,13 @@ using TOML: parse, parsefile
 
 if isempty(ARGS)
     PARAMS = parse("""
-seed = 42 
+seed = 4
 render = true
 animation_steps = 1000
 video_path = "./animations/"
 log_path = "./logs/"
 figure_path = "./figures/"
+model_path = "./models/"
 number_of_targets = 10 
 beamwidth_degrees = 10
 radar_min_range_meters = 500
@@ -48,42 +61,7 @@ include("Flat_POMDP/solver_random.jl")
 include("Flat_POMDP/solver_simple_net.jl")
 include("Flat_POMDP/visualizations.jl")
 
-run_time = format(now(), "YYYYmmdd-HHMMSS-sss")
-@info "Run: $(run_time)"
+#### Run Experiment
+include("experiments/generate_comparison.jl")
 
-mkpath(PARAMS["log_path"])
-
-rng = Xoshiro(PARAMS["seed"])
-child_pomdp = FlatPOMDP(rng, DISCOUNT)
-u = MultiFilterUpdater(child_pomdp.rng)
-pomdp = BeliefPOMDP(child_pomdp.rng, child_pomdp, u)
-#solver = RandomMultiFilter()
-#solver = RandomSolver()
-solver = SimpleGreedySolver()
-policy = solve(solver, pomdp)
-
-hr = HistoryRecorder(; max_steps=PARAMS["animation_steps"])
-history = simulate(hr, pomdp, policy)
-
-for step in eachstep(history)
-    pdf(POMDPTools.render(pomdp, step), "$("./pdfs/")$(step.t).pdf")
-end
-#
-# if PARAMS["render"]
-#     anim = @animate for step in eachstep(history)
-#         POMDPTools.render(pomdp, step)
-#     end
-#     mkpath(PARAMS["video_path"])
-#     mp4(anim, "$(PARAMS["video_path"])$(run_time).mp4"; loop=1)
-# end
-#
-# rewards = [reward(pomdp, step.s, step.b) for step in eachstep(history)]
-#
-# mkpath(PARAMS["log_path"])
-# open("$(PARAMS["log_path"])$(run_time).txt", "w") do f
-#     for i in rewards
-#         println(f, i)
-#     end
-# end
-#
 end

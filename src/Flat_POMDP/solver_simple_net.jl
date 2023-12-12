@@ -1,10 +1,10 @@
 struct SimpleGreedySolver <: Solver end
 
-N_EPOCHS = 20
-N_TRAIN_EPISODES = 500
+N_EPOCHS = 1
+N_TRAIN_EPISODES = 100
 N_TEST_EPISODES = 10
 N_SKIP_FIRST_STEPS = 100
-N_STEPS_PER_EPISODE = 100
+N_STEPS_PER_EPISODE = 500
 MONTE_CARLO_ROLLOUTS = 100
 
 ACTION_WIDTH = 1
@@ -68,6 +68,11 @@ function POMDPs.solve(::SimpleGreedySolver, pomdp::POMDP)
         @info "epoch $(epoch_index) mean loss: $(mean_loss)"
         push!(loss_history, mean_loss)
     end
+
+    #TODO: add loading logic from here too
+
+    mkpath(PARAMS["model_path"])
+    jldsave("$(run_time)-trained.jld2"; opt_state)
 
     return MCTwigSPolicy(model)
 end
