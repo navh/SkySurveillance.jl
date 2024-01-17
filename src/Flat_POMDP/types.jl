@@ -7,8 +7,12 @@ struct Target
     ẏ::Float32
 end
 
+# struct FlatState
+#     targets::SVector{PARAMS["number_of_targets"],Target}
+# end
+
 struct FlatState
-    targets::SVector{PARAMS["number_of_targets"],Target}
+    targets::Vector{Target}
 end
 
 struct TargetObservation
@@ -47,4 +51,4 @@ struct UpdaterState
     belief_state::MultiFilterBelief
 end
 
-UpdaterObservation = SVector{2 * PARAMS["number_of_targets"],Float32}
+UpdaterObservation = Vector{Float32} # SVector{2 * PARAMS["number_of_targets"],Float32}

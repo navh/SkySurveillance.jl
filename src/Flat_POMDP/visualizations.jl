@@ -2,29 +2,25 @@ function render(m::POMDP)
     return render(m, NamedTuple())
 end
 
-function POMDPTools.render(pomdp::FlatPOMDP, step::NamedTuple)
-    return draw_the_world(step.s, step.b, step.a, step.o)
-end
-
-filter_colors = distinguishable_colors(
-    PARAMS["n_particles"], [RGB(1, 1, 1), RGB(0, 0, 0)]; dropseed=true
-)
-
 function circleShape(h, k, r)
     θ = LinRange(0, 2π, 500)
     return h .+ r * sin.(θ), k .+ r * cos.(θ)
 end
 
-function draw_the_world(s, b, a, o)
+function POMDPTools.render(pomdp::FlatPOMDP, step::NamedTuple)
     plt = plot(;
         axis=nothing,
         showaxis=false,
         size=(1920, 1080),
-        xlims=(-XY_MAX_METERS, XY_MAX_METERS),
-        ylims=(-XY_MAX_METERS, XY_MAX_METERS),
+        xlims=(-pomdp.xy_max_meters, pomdp.xy_max_meters),
+        ylims=(-pomdp.xy_max_meters, pomdp.xy_max_meters),
     )
 
-    for filter in b
+    filter_colors = distinguishable_colors(
+        length(step.b), [RGB(1, 1, 1), RGB(0, 0, 0)]; dropseed=true
+    )
+
+    for filter in step.b
         plot!(
             plt,
             [(particle.x, particle.y) for particle in filter.particles];
@@ -38,7 +34,7 @@ function draw_the_world(s, b, a, o)
     # Draw visible circle
     plot!(
         plt,
-        circleShape(0, 0, PARAMS["radar_max_range_meters"]);
+        circleShape(0, 0, pomdp.radar_max_range_meters);
         seriestype=[:shape],
         lw=0.5,
         color=:black,
@@ -49,22 +45,22 @@ function draw_the_world(s, b, a, o)
     )
 
     # Draw action beam
-    left = action_to_rad(a) - beamwidth_rad
-    right = action_to_rad(a) + beamwidth_rad
+    left = action_to_rad(step.a) - pomdp.beamwidth_rad
+    right = action_to_rad(step.a) + pomdp.beamwidth_rad
     beam = Shape(
         [
             (0.0, 0.0)
-            Plots.partialcircle(left, right, 100, PARAMS["radar_max_range_meters"])
+            Plots.partialcircle(left, right, 100, pomdp.radar_max_range_meters)
             (0.0, 0.0)
         ],
     )
     plot!(plt, beam; fillcolor=:red, fillalpha=0.5)
 
     # Plot observations
-    if !isempty(o)
+    if !isempty(step.o)
         plot!(
             plt,
-            [(target.r * cos(target.θ), target.r * sin(target.θ)) for target in o];
+            [(target.r * cos(target.θ), target.r * sin(target.θ)) for target in step.o];
             seriestype=:scatter,
             markershape=:xcross,
             markercolor=:red,
@@ -75,8 +71,8 @@ function draw_the_world(s, b, a, o)
     end
 
     # Add targets
-    visible_targets = filter(target -> target.appears_at_t >= 0, s.targets)
-    invisible_targets = filter(target -> target.appears_at_t < 0, s.targets)
+    visible_targets = filter(target -> target.appears_at_t >= 0, step.s.targets)
+    invisible_targets = filter(target -> target.appears_at_t < 0, step.s.targets)
     plot!(
         plt,
         [(target.x, target.y) for target in visible_targets];

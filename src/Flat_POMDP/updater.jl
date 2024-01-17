@@ -1,4 +1,4 @@
-function propagate_particle(p::WeightedParticle, time::Float64)
+function propagate_particle(p::WeightedParticle, time::Number)
     return WeightedParticle(
         p.x + p.ẋ * time + rand(Normal(0.0, 200.0)),
         p.y + p.ẏ * time + rand(Normal(0.0, 200.0)),
@@ -8,7 +8,7 @@ function propagate_particle(p::WeightedParticle, time::Float64)
     )
 end
 
-function propagate_filter(filter::SingleFilter, time::Float64)
+function propagate_filter(filter::SingleFilter, time::Number)
     return SingleFilter(
         filter.id,
         [propagate_particle(particle, time) for particle in filter.particles],
@@ -29,7 +29,7 @@ function reweight_particle(particle::WeightedParticle, obs_x, obs_y, obs_ẋ, ob
     #     # The more I think about this, the less that I think it should be related to the other distributions
     #     # Should this just be 1/(1+RMS) or something?
     # )
-    weight = 1 / (1 + √((particle.x - obs_x)^2 + (particle.y - obs_y)^2))# just rms of distance? 
+    weight = 1 / (1 + √((particle.x - obs_x)^2 + (particle.y - obs_y)^2)) # just rms of distance? 
     return WeightedParticle(particle.x, particle.y, particle.ẋ, particle.ẏ, weight)
 end
 
@@ -50,7 +50,7 @@ function reweight_filter(filter::SingleFilter, obs)
     )
 end
 
-function initialize_filter(obs)
+function initialize_filter(obs, n_particles::Int)
     x = obs.r * cos(obs.θ)
     y = obs.r * sin(obs.θ)
     ẋ = obs.v * cos(obs.θ)
@@ -59,7 +59,7 @@ function initialize_filter(obs)
     ḋ = Normal(0.0, 100.0) # Some percent of range, really comes from PRF. Let's say PRF of 2khz, 100samples, v/λ, if λ is 50cm, so 6m/s.
     particles = [
         WeightedParticle(x + rand(d), y + rand(d), ẋ + rand(ḋ), ẏ + rand(ḋ), 1.0) for
-        _ in 1:PARAMS["n_particles"]
+        _ in 1:n_particles
     ]
     return SingleFilter(obs.id, particles, x, y, 0.0)
 end
@@ -68,25 +68,31 @@ function weight_sum(filter::SingleFilter)
     return sum([particle.w for particle in filter.particles])
 end
 
-function low_variance_resampler(filter::SingleFilter)
-    ps = Array{WeightedParticle}(undef, PARAMS["n_particles"])
-    r = rand(rng) * weight_sum(filter) / PARAMS["n_particles"]
+function low_variance_resampler(rng::RNG, filter::SingleFilter) where {RNG<:AbstractRNG}
+
+    # ps = Array{WeightedParticle}(undef, PARAMS["n_particles"])
+    # r = rand(rng) * weight_sum(filter) / PARAMS["n_particles"]
+    ps = Array{WeightedParticle}(undef, length(filter.particles))
+    r = rand(rng) * weight_sum(filter) / length(filter.particles)
     i = 1
     c = filter.particles[i].w
     U = r
-    for m in 1:PARAMS["n_particles"]
+    #for m in 1:PARAMS["n_particles"]
+    for m in 1:length(filter.particles)
         while U > c && i < length(filter.particles)
             i += 1
             c += filter.particles[i].w
         end
-        U += weight_sum(filter) / PARAMS["n_particles"]
+        U += weight_sum(filter) / length(filter.particles)
         ps[m] = filter.particles[i]
     end
     return SingleFilter(filter.id, ps, filter.last_x, filter.last_y, filter.last_t)
 end
 
-struct MultiFilterUpdater <: POMDPs.Updater
+@kwdef struct MultiFilterUpdater <: POMDPs.Updater
     rng::AbstractRNG
+    dwell_time_seconds::Float32
+    n_particles_per_filter::Int
 end
 
 function POMDPs.initialize_belief(up::MultiFilterUpdater, d)
@@ -97,7 +103,7 @@ function POMDPs.update(up::MultiFilterUpdater, belief_old, action, observation)
     # 1) Prediction (or propagation) - each state particle is simulated forward one step in time
 
     # TODO: pack 'time' in with action?
-    time = PARAMS["dwell_time_seconds"]
+    time = up.dwell_time_seconds
 
     propagated_belief = [propagate_filter(filter, time) for filter in belief_old]
 
@@ -119,10 +125,12 @@ function POMDPs.update(up::MultiFilterUpdater, belief_old, action, observation)
     # 2.3) - Filterless observations, initialize a new filter
     new_observations = filter(o -> o.id ∉ [f.id for f in propagated_belief], observation)
 
-    new_filters = [initialize_filter(o) for o in new_observations]
+    new_filters = [
+        initialize_filter(o, up.n_particles_per_filter) for o in new_observations
+    ]
 
     all_filters = vcat(no_observed_filters, reweighted_filters, new_filters)
 
     # 3) Resampling - a new collection of state particles is generated with particle. frequencies proportional to the new weights
-    return [low_variance_resampler(f) for f in all_filters] # O(n) resampler, page 110 of Probabilistic Robotics by Thurn, Burgard, and Fox.
+    return [low_variance_resampler(up.rng, f) for f in all_filters] # O(n) resampler, page 110 of Probabilistic Robotics by Thurn, Burgard, and Fox.
 end

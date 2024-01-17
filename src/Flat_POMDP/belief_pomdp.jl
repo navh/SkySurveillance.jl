@@ -6,7 +6,7 @@ Create a POMDP corresponding to POMDP `underlying_pomdp` with observations resul
 
 struct BeliefPOMDP <: POMDP{UpdaterState,FlatAction,UpdaterObservation}
     rng::AbstractRNG
-    underlying_pomdp::POMDP
+    underlying_pomdp::FlatPOMDP
     updater::Updater
 end
 
@@ -15,7 +15,7 @@ function POMDPs.isterminal(pomdp::BeliefPOMDP, s::UpdaterState)
 end
 
 function POMDPs.initialobs(pomdp::BeliefPOMDP, s::UpdaterState)
-    return Deterministic(zeros(SVector{2 * PARAMS["number_of_targets"]}))
+    return Deterministic(zeros(SVector{2 * pomdp.underlying_pomdp.number_of_targets}))
 end
 
 function POMDPs.gen(
@@ -36,7 +36,9 @@ end
 ### states 
 
 function POMDPs.initialstate(pomdp::BeliefPOMDP)
-    return Deterministic(UpdaterState(initialize_random_targets(pomdp.rng), SingleFilter[]))
+    return Deterministic(
+        UpdaterState(initialize_random_targets(pomdp.underlying_pomdp), SingleFilter[])
+    )
 end
 
 ### actions
@@ -55,7 +57,7 @@ function generate_o(
     rng::AbstractRNG,
 )
     # return s.belief_state
-    return belief_to_observation(s.belief_state)
+    return belief_to_observation(pomdp, s.belief_state)
 end
 
 function filter_variance(filter::SingleFilter)
@@ -66,7 +68,7 @@ function filter_mean_θ(filter::SingleFilter)
     return mean([atan(particle.y, particle.x) for particle in filter.particles])
 end
 
-function belief_to_observation(belief)
+function belief_to_observation(pomdp::BeliefPOMDP, belief)
     θs_and_variances = sort([
         (filter_mean_θ(filter), filter_variance(filter)) for filter in belief
     ])
@@ -76,10 +78,10 @@ function belief_to_observation(belief)
         push!(s, θ)
         push!(s, var)
     end
-    while length(s) < 2 * PARAMS["number_of_targets"]
+    while length(s) < 2 * pomdp.underlying_pomdp.number_of_targets
         push!(s, 0.0)
     end
-    return SVector{2 * PARAMS["number_of_targets"]}(s)
+    return SVector{2 * pomdp.underlying_pomdp.number_of_targets}(s)
 end
 
 ### transitions

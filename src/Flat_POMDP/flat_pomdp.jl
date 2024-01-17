@@ -4,28 +4,26 @@
 # TODO: add beamwidth selection to action space
 # TODO: add target size to target attributes, use snr math to illuminate targets, 0.01m^3 bird to 500m^3 747
 
-beamwidth_rad::Float32 = PARAMS["beamwidth_degrees"] * π / 360
-
-XY_MAX_METERS::Float32 = PARAMS["radar_max_range_meters"]
-XY_MIN_METERS::Float32 = -1 * PARAMS["radar_max_range_meters"]
-
-DWELL_TIME_SECONDS::Float32 = PARAMS["dwell_time_seconds"] # ∈ [10ms,40ms] # from Jack
-TARGET_VELOCITY_MAX_METERS_PER_SECOND::Float32 = PARAMS["target_velocity_max_meters_per_second"] # rounded up F-22 top speed is 700m/s
-
-# target_reappearing_distribution = Uniform(-50, 0)
-target_reappearing_distribution = Deterministic(0)
-
-DISCOUNT = 0.95 # was 1.0
-
-mutable struct FlatPOMDP <: POMDP{FlatState,FlatAction,FlatObservation} # POMDP{State, Action, Observation}
+# mutable struct FlatPOMDP <: POMDP{FlatState,FlatAction,FlatObservation} # POMDP{State, Action, Observation}
+@kwdef struct FlatPOMDP <: POMDP{FlatState,FlatAction,FlatObservation} # POMDP{State, Action, Observation}
     rng::AbstractRNG
-    discount::Float32
+    discount::Float64
+    number_of_targets::Int64
+    beamwidth_rad::Float64
+    radar_min_range_meters::Int64
+    radar_max_range_meters::Int64
+    n_particles::Int64
+    xy_min_meters::Float64
+    xy_max_meters::Float64
+    dwell_time_seconds::Float64 # ∈ [10ms,40ms] # from Jack
+    target_velocity_max_meters_per_second::Float64 # rounded up f-22 top speed is 700m/s
+    target_reappearing_distribution::Deterministic{Int64} # should be some generic 'distribution' type
 end
 
 function POMDPs.isterminal(pomdp::FlatPOMDP, s::FlatState)
     # terminate early if no targets are in range
     for target in s.targets
-        if sqrt(target.x^2 + target.y^2) <= PARAMS["radar_max_range_meters"]
+        if √(target.x^2 + target.y^2) <= pomdp.radar_max_range_meters
             return false
         end
     end
@@ -49,32 +47,34 @@ end
 
 ### states
 
-function initialize_random_targets(rng::RNG)::FlatState where {RNG<:AbstractRNG}
+function initialize_random_targets(p::FlatPOMDP)::FlatState
     xs = rand(
-        rng, Uniform(XY_MIN_METERS * 0.8, XY_MAX_METERS * 0.8), PARAMS["number_of_targets"]
+        p.rng, Uniform(p.xy_min_meters * 0.8, p.xy_max_meters * 0.8), p.number_of_targets
     )
     ys = rand(
-        rng, Uniform(XY_MIN_METERS * 0.8, XY_MAX_METERS * 0.8), PARAMS["number_of_targets"]
+        p.rng, Uniform(p.xy_min_meters * 0.8, p.xy_max_meters * 0.8), p.number_of_targets
     )
     x_velocities = rand(
-        rng,
+        p.rng,
         Uniform(
-            -TARGET_VELOCITY_MAX_METERS_PER_SECOND, TARGET_VELOCITY_MAX_METERS_PER_SECOND
+            -p.target_velocity_max_meters_per_second,
+            p.target_velocity_max_meters_per_second,
         ),
-        PARAMS["number_of_targets"],
+        p.number_of_targets,
     )
     y_velocities = rand(
-        rng,
+        p.rng,
         Uniform(
-            -TARGET_VELOCITY_MAX_METERS_PER_SECOND, TARGET_VELOCITY_MAX_METERS_PER_SECOND
+            -p.target_velocity_max_meters_per_second,
+            p.target_velocity_max_meters_per_second,
         ),
-        PARAMS["number_of_targets"],
+        p.number_of_targets,
     )
-    random_times = rand(rng, target_reappearing_distribution, PARAMS["number_of_targets"])
-    random_times[1] = 0 # Make at least one visible right first step
+    random_times = rand(p.rng, p.target_reappearing_distribution, p.number_of_targets)
+    random_times[1] = 0 # at least one visible at first step
     initial_targets = [
         Target(i, random_times[i], xs[i], ys[i], x_velocities[i], y_velocities[i]) for
-        i in 1:PARAMS["number_of_targets"]
+        i in 1:(p.number_of_targets)
     ]
     return FlatState(initial_targets)
 end
@@ -82,7 +82,7 @@ end
 function POMDPs.initialstate(pomdp::FlatPOMDP)
     # Maybe needs to be some implicit distribution.
     # Maybe just deterministic based on an RNG.
-    return Deterministic(initialize_random_targets(pomdp.rng))
+    return Deterministic(initialize_random_targets(pomdp))
 end
 
 ### actions 
@@ -98,10 +98,15 @@ function action_to_rad(action::FlatAction)
     return action * 2π - π # atan returns ∈ [-π,π], so lets just play nice
 end
 
-function target_spotted(target::Target, action::FlatAction, beamwidth::Float32)
-    if √(target.x^2 + target.y^2) > PARAMS["radar_max_range_meters"]
-        return false
-    end
+function target_visible(target::Target)
+    return target.appears_at_t >= 0
+end
+
+function target_in_range(target::Target, max_range::Number)
+    return √(target.x^2 + target.y^2) < max_range
+end
+
+function target_in_beam(target::Target, action::FlatAction, beamwidth::Number)
     target_θ = atan(target.y, target.x)
     # TODO: check this around -pi to pi transition
     #return abs((target_θ - action_to_rad(action)) % π) < beamwidth # atan ∈ [-π,π] 
@@ -122,7 +127,7 @@ function target_observation(target)
     return TargetObservation(target.id, r, observed_θ, observed_v)
 end
 
-function illumination_observation(action::FlatAction, state::FlatState)
+function illumination_observation(pomdp::FlatPOMDP, action::FlatAction, state::FlatState)
 
     # 1 - e**-SNR
     # SNR = POWER * t / (BW r**4)
@@ -137,10 +142,11 @@ function illumination_observation(action::FlatAction, state::FlatState)
     # - then I used that as a mask on a random grid of velocities
     # - can't recycle the random or they'll all be max velocity
 
-    observations = TargetObservation[]
-
     observed_targets = filter(
-        target -> target.appears_at_t >= 0 && target_spotted(target, action, beamwidth_rad),
+        target ->
+            target_visible(target) &&
+                target_in_range(target, pomdp.radar_max_range_meters) &&
+                target_in_beam(target, action, pomdp.beamwidth_rad),
         state.targets,
     )
 
@@ -155,7 +161,7 @@ function generate_o(
     end
 
     # Remember you make the observation at sp NOT s
-    return illumination_observation(action, sp)
+    return illumination_observation(pomdp, action, sp)
 end
 
 # transitions 
@@ -177,8 +183,8 @@ function generate_s(
     if isterminal(pomdp, s)
         return s
     end
-    new_targets = SVector{PARAMS["number_of_targets"],Target}([
-        update_target(target, DWELL_TIME_SECONDS) for target in s.targets
+    new_targets = SVector{pomdp.number_of_targets,Target}([
+        update_target(target, pomdp.dwell_time_seconds) for target in s.targets
     ])
     return FlatState(new_targets)
 end
@@ -215,7 +221,7 @@ function POMDPs.reward(pomdp::FlatPOMDP, s::FlatState, b::MultiFilterBelief)
 
     for target in s.targets
         if target.appears_at_t >= 0 &&
-            √(target.x^2 + target.y^2) <= PARAMS["radar_max_range_meters"]
+            √(target.x^2 + target.y^2) <= pomdp.radar_max_range_meters
             filter_index = findfirst(x -> x.id == target.id, b)
             # change to spread of the particle filter 
             if filter_index === nothing
