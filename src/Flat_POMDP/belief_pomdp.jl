@@ -81,7 +81,7 @@ function belief_to_observation(pomdp::BeliefPOMDP, belief)
     while length(s) < 2 * pomdp.underlying_pomdp.number_of_targets
         push!(s, 0.0)
     end
-    return SVector{2 * pomdp.underlying_pomdp.number_of_targets}(s)
+    return SVector{2 * pomdp.underlying_pomdp.number_of_targets,Float32}(s)
 end
 
 ### transitions
