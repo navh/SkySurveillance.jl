@@ -40,7 +40,6 @@ function POMDPs.solve(solver::SimpleGreedySolver, pomdp::BeliefPOMDP)
             )
                 i += 1
                 if i > solver.n_skip_first_steps
-                    @info "typeof o" typeof(o)
                     grads = Flux.gradient(model) do _
                         result = model(action_observation(a, o))
                         typeof(result)
