@@ -108,12 +108,12 @@ function POMDPs.update(up::MultiFilterUpdater, belief_old, action, observation)
     propagated_belief = [propagate_filter(filter, time) for filter in belief_old]
 
     # 2) Reweighting - an explicit measurement (observation) model is used to calculate a new weight
-    ### 3 cases: observationless filters, filter with observation, filterless observations 
+    ### 3 cases: observationless filters, observed filters, filterless observations 
 
     # 2.1) - Non-observed, do nothing
     no_observed_filters = filter(x -> x.id ∉ [o.id for o in observation], propagated_belief)
 
-    # 2.2) - Non-observed, reweight based on observation, drop empty filters
+    # 2.2) - Observed Filters, reweight based on observation, drop empty filters
     observed_filters = filter(x -> x.id ∈ [o.id for o in observation], propagated_belief)
 
     reweighted_filters = [
