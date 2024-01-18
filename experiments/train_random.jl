@@ -1,20 +1,10 @@
-using CUDA: NVCL_CTX_SCHED_SPIN
 include("../src/SkySurveillance.jl")
 using .SkySurveillance:
     FlatPOMDP, MultiFilterUpdater, BeliefPOMDP, RandomSolver, SimpleGreedySolver
 
-using CUDA
-using CommonRLInterface: AbstractEnv
 using Dates: format, now
 using JLD2
-using Distributions: Normal, Uniform
-using Flux
-using Flux: glorot_uniform, mse
-using IntervalSets
-using POMDPTools.BeliefUpdaters: NothingUpdater, PreviousObservationUpdater
-using POMDPTools.Simulators: Sim, run_parallel, stepthrough
-using POMDPTools:
-    Deterministic, HistoryRecorder, POMDPTools, RandomPolicy, RandomSolver, eachstep
+using POMDPTools: POMDPTools
 using POMDPs:
     POMDP, POMDPs, Policy, Solver, Updater, discount, isterminal, reward, simulate, solve
 using Plots:
@@ -29,71 +19,49 @@ using Plots:
     pdf,
     savefig,
     pgfplotsx
-using Random: AbstractRNG, Xoshiro, default_rng
-using StaticArrays: SVector
-using Statistics: mean, var
+using Random: Xoshiro
 using TOML: parse, parsefile
-
-if isempty(ARGS)
-    println("ARGS empty")
-    PARAMS = parse("""
-seed = 4
-render = true
-animation_steps = 1000
-video_path = "./animations/"
-log_path = "./logs/"
-figure_path = "./figures/"
-model_path = "./models/"
-number_of_targets = 10
-beamwidth_degrees = 10
-radar_min_range_meters = 500
-radar_max_range_meters = 500_000
-dwell_time_seconds = 200e-3
-target_velocity_max_meters_per_second = 700
-n_particles = 100
-""")
-else
-    println("parse ARGS")
-    PARAMS = parsefile(ARGS[1])
-    @info "Parameters" PARAMS
-end
-
-# N_EPOCHS = 1
-# N_TRAIN_EPISODES = 100
-# N_TEST_EPISODES = 10
-# N_SKIP_FIRST_STEPS = 100
-# N_STEPS_PER_EPISODE = 500
-# MONTE_CARLO_ROLLOUTS = 100
-
-N_EPOCHS = 1
-N_TRAIN_EPISODES = 10
-N_TEST_EPISODES = 10
-N_SKIP_FIRST_STEPS = 100
-N_STEPS_PER_EPISODE = 100
-MONTE_CARLO_ROLLOUTS = 10
 
 run_time = format(now(), "YYYYmmdd-HHMMSS-sss")
 @info "Run: $(run_time)"
 
+PARAMS = Dict(
+    "seed" => 4,
+    "render" => true,
+    "animation_steps" => 1000,
+    "video_path" => "./animations/",
+    "log_path" => "./logs/",
+    "figure_path " => "./figures/",
+    "model_path" => "./models/",
+    "number_of_targets" => 10,
+    "beamwidth_degrees" => 10,
+    "radar_min_range_meters" => 500,
+    "radar_max_range_meters" => 500_000,
+    "dwell_time_seconds" => 200e-3,
+    "target_velocity_max_meters_per_second" => 700,
+    "n_particles" => 100,
+    "n_epochs" => 1,
+    "n_train_episodes" => 10,
+    "n_test_episodes" => 10,
+    "n_skip_first_steps" => 100,
+    "n_steps_per_episode" => 500,
+    "monte_carlo_rollouts" => 100,
+)
+
+if isempty(ARGS)
+    @info "ARGS empty"
+else
+    @info "parsing ARGS"
+    parsed_params = parsefile(ARGS[1])
+    for (k, v) in parsed_params
+        PARAMS[k] = v
+    end
+end
+
+@info "Parameters" PARAMS
 mkpath(PARAMS["log_path"])
 
 rng = Xoshiro(PARAMS["seed"])
-
-# mutable struct FlatPOMDP <: POMDP{FlatState,FlatAction,FlatObservation} # POMDP{State, Action, Observation}
-#     rng::AbstractRNG
-#     discount::Float64
-#     number_of_targets::Int64
-#     beamwidth_rad::Float64
-#     radar_min_range_meters::Int64
-#     radar_max_range_meters::Int64
-#     n_particles::Int64
-#     xy_min_meters::Float64
-#     xy_max_meters::Float64
-#     dwell_time_seconds::Float64 # ∈ [10ms,40ms] # from Jack
-#     target_velocity_max_meters_per_second::Float64 # rounded up f-22 top speed is 700m/s
-#     # target_reappearing_distribution::Union{Uniform,Deterministic{Int64}} # should be some generic 'distribution' type
-#     target_reappearing_distribution::Deterministic{Int64} # should be some generic 'distribution' type
-# end
 
 child_pomdp = FlatPOMDP(;
     rng=rng,
@@ -118,12 +86,12 @@ random_solver = RandomSolver()
 random_policy = solve(random_solver, pomdp)
 learned_solver = SimpleGreedySolver(;
     pomdp=pomdp,
-    n_epochs=N_EPOCHS,
-    n_train_episodes=N_TRAIN_EPISODES,
-    n_test_episodes=N_TEST_EPISODES,
-    n_skip_first_steps=N_SKIP_FIRST_STEPS,
-    n_steps_per_episode=N_STEPS_PER_EPISODE,
-    monte_carlo_rollouts=MONTE_CARLO_ROLLOUTS,
+    n_epochs=PARAMS["n_epochs"],
+    n_train_episodes=PARAMS["n_train_episodes"],
+    n_test_episodes=PARAMS["n_test_episodes"],
+    n_skip_first_steps=PARAMS["n_skip_first_steps"],
+    n_steps_per_episode=PARAMS["n_steps_per_episode"],
+    monte_carlo_rollouts=PARAMS["monte_carlo_rollouts"],
 )
 learned_policy = solve(learned_solver, pomdp)
 
