@@ -77,7 +77,6 @@ function low_variance_resampler(rng::RNG, filter::SingleFilter) where {RNG<:Abst
     i = 1
     c = filter.particles[i].w
     U = r
-    #for m in 1:PARAMS["n_particles"]
     for m in 1:length(filter.particles)
         while U > c && i < length(filter.particles)
             i += 1
