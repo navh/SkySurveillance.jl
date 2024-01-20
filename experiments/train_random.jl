@@ -1,24 +1,10 @@
 include("../src/SkySurveillance.jl")
 using .SkySurveillance:
-    FlatPOMDP, MultiFilterUpdater, BeliefPOMDP, RandomSolver, SimpleGreedySolver
-
+    BeliefPOMDP, FlatPOMDP, MultiFilterUpdater, RandomSolver, SimpleGreedySolver
 using Dates: format, now
-using JLD2
-using POMDPTools: POMDPTools
-using POMDPs:
-    POMDP, POMDPs, Policy, Solver, Updater, discount, isterminal, reward, simulate, solve
-using Plots:
-    @animate,
-    Plots,
-    RGB,
-    Shape,
-    distinguishable_colors,
-    mp4,
-    plot,
-    plot!,
-    pdf,
-    savefig,
-    pgfplotsx
+using POMDPs: solve, simulate, reward, mean
+using POMDPTools: Deterministic, POMDPTools, HistoryRecorder, eachstep
+using Plots: plot, plot!, savefig
 using Random: Xoshiro
 using TOML: parse, parsefile
 
@@ -53,12 +39,13 @@ if isempty(ARGS)
 else
     @info "parsing ARGS"
     parsed_params = parsefile(ARGS[1])
-    for (k, v) in parsed_params
-        PARAMS[k] = v
+    for (key, value) in parsed_params
+        PARAMS[key] = value
     end
 end
 
 @info "Parameters" PARAMS
+
 mkpath(PARAMS["log_path"])
 
 rng = Xoshiro(PARAMS["seed"])
