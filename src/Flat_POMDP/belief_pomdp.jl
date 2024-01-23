@@ -104,5 +104,6 @@ end
 ### visualizations 
 
 function POMDPTools.render(pomdp::BeliefPOMDP, step::NamedTuple)
-    return draw_the_world(step.s.underlying_state, step.s.belief_state, step.a, []) #empty o
+    return POMDPTools.render(pomdp.underlying_pomdp, step)
+    #return draw_the_world(step.s.underlying_state, step.s.belief_state, step.a, []) #empty o
 end
