@@ -1,4 +1,3 @@
-run_time = format(now(), "YYYYmmdd-HHMMSS-sss")
 @info "Run: $(run_time)"
 
 mkpath(PARAMS["log_path"])
