@@ -48,6 +48,7 @@ MultiFilterBelief = Array{SingleFilter}
 
 struct UpdaterState
     underlying_state::FlatState
+    underlying_observation::FlatObservation
     belief_state::MultiFilterBelief
 end
 

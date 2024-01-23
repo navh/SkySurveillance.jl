@@ -37,7 +37,11 @@ end
 
 function POMDPs.initialstate(pomdp::BeliefPOMDP)
     return Deterministic(
-        UpdaterState(initialize_random_targets(pomdp.underlying_pomdp), SingleFilter[])
+        UpdaterState(
+            initialize_random_targets(pomdp.underlying_pomdp),
+            TargetObservation[],
+            SingleFilter[],
+        ),
     )
 end
 
@@ -92,7 +96,7 @@ function generate_s(
     sp = generate_s(pomdp.underlying_pomdp, s.underlying_state, a, rng)
     o = generate_o(pomdp.underlying_pomdp, s.underlying_state, a, sp, rng)
     bp = POMDPs.update(pomdp.updater, s.belief_state, a, o)
-    return UpdaterState(sp, bp)
+    return UpdaterState(sp, o, bp)
 end
 
 ### rewards
@@ -104,6 +108,11 @@ end
 ### visualizations 
 
 function POMDPTools.render(pomdp::BeliefPOMDP, step::NamedTuple)
-    return POMDPTools.render(pomdp.underlying_pomdp, step)
-    #return draw_the_world(step.s.underlying_state, step.s.belief_state, step.a, []) #empty o
+    underlying_step = (
+        s=step.s.underlying_state,
+        b=step.s.belief_state,
+        a=step.a,
+        o=step.s.underlying_observation,
+    )
+    return POMDPTools.render(pomdp.underlying_pomdp, underlying_step)
 end

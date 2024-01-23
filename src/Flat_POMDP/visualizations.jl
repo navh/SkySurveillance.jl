@@ -1,6 +1,6 @@
-function render(m::POMDP)
-    return render(m, NamedTuple())
-end
+# function render(m::POMDP)
+#     return render(m, NamedTuple())
+# end
 
 function circleShape(h, k, r)
     θ = LinRange(0, 2π, 500)
@@ -17,7 +17,7 @@ function POMDPTools.render(pomdp::FlatPOMDP, step::NamedTuple)
     )
 
     filter_colors = distinguishable_colors(
-        length(step.b), [RGB(1, 1, 1), RGB(0, 0, 0)]; dropseed=true
+        pomdp.number_of_targets, [RGB(1, 1, 1), RGB(0, 0, 0)]; dropseed=true
     )
 
     for filter in step.b

@@ -26,7 +26,7 @@ using Plots:
     pdf,
     savefig,
     pgfplotsx
-using Random: AbstractRNG, Xoshiro, default_rng
+using Random: AbstractRNG, Xoshiro
 using StaticArrays: SVector
 using Statistics: mean, var
 using TOML: parse, parsefile
