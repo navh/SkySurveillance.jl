@@ -52,6 +52,6 @@ function plot_everything()
     plt = plot!(plt, random_rewards; label="Mean Random Policy", color=:blue)
     plt = plot!(plt, learned_rewards; label="Mean Learned Policy", color=:red)
     #
-    return savefig(plt, "pdfs/comparison_$(run_time).pdf")
+    return savefig(plt, dir_paths.figure_dir * "comparison.pdf")
 end
 plot_everything()
