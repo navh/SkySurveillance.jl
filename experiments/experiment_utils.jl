@@ -4,7 +4,7 @@ using .SkySurveillance:
 using Dates: format, now
 using POMDPs: solve, simulate, reward, mean
 using POMDPTools: Deterministic, POMDPTools, HistoryRecorder, eachstep
-using Plots: plot, plot!, savefig, @animate, mp4, Plots
+using Plots: plot, plot!, savefig, @animate, mp4, Plots, pdf
 using Random: Xoshiro
 using TOML
 
@@ -16,10 +16,6 @@ PARAMS = Dict(
     "render" => true,
     "animation_steps" => 1000,
     "output_path" => "./out",
-    # "video_path" => "animations/",
-    # "log_path" => "logs/",
-    # "figure_path" => "figures/",
-    # "model_path" => "models/",
     "number_of_targets" => 10,
     "beamwidth_degrees" => 10,
     "radar_min_range_meters" => 500,
