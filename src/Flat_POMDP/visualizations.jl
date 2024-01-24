@@ -1,7 +1,3 @@
-# function render(m::POMDP)
-#     return render(m, NamedTuple())
-# end
-
 function circleShape(h, k, r)
     θ = LinRange(0, 2π, 500)
     return h .+ r * sin.(θ), k .+ r * cos.(θ)
