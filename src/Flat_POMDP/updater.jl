@@ -1,9 +1,9 @@
 function propagate_particle(p::WeightedParticle, time::Number)
     return WeightedParticle(
-        p.x + p.ẋ * time + rand(Normal(0.0, 200.0)),
-        p.y + p.ẏ * time + rand(Normal(0.0, 200.0)),
-        p.ẋ + rand(Normal(0.0, 16.0)), # Every time step... this is a LOT of noise
-        p.ẏ + rand(Normal(0.0, 16.0)),
+        p.x + p.ẋ * time + rand(Normal(0.0, 25.0)),
+        p.y + p.ẏ * time + rand(Normal(0.0, 25.0)),
+        p.ẋ + rand(Normal(0.0, 6.0)),
+        p.ẏ + rand(Normal(0.0, 6.0)),
         p.w,
     )
 end
@@ -55,11 +55,24 @@ function initialize_filter(obs, n_particles::Int)
     y = obs.r * sin(obs.θ)
     ẋ = obs.v * cos(obs.θ)
     ẏ = obs.v * sin(obs.θ)
-    d = Normal(0.0, 25.0) # TODO: paramaterize at least σ? Ask ravi for a good theta? different d for r and v? Really comes from bandwidth, 3mhz, c/2b? +/- 25m. 1ghz radar, that would be 0.3% bandwidth. Really low?.
-    ḋ = Normal(0.0, 100.0) # Some percent of range, really comes from PRF. Let's say PRF of 2khz, 100samples, v/λ, if λ is 50cm, so 6m/s.
+    d = Normal(0.0, 25.0) # TODO: paramaterize at least σ? Ask ravi for a good theta? different d for r and v? Really comes from bandwidth, 3mhz, c/2b? +/- 25m. 1ghz radar, that would be 0.3% bandwidth.
+    ḋ = Normal(0.0, 6.0) # Some percent of range, really comes from PRF. Let's say PRF of 2khz, 100samples, v/λ, if λ is 50cm, so 6m/s.
+    x_max_tangential_velocity = abs(700 * sin(obs.θ))
+    y_max_tangential_velocity = abs(700 * cos(obs.θ))
+    x_undertainty_in_tangential_velocity = Uniform(
+        -x_max_tangential_velocity, x_max_tangential_velocity
+    )
+    y_undertainty_in_tangential_velocity = Uniform(
+        -y_max_tangential_velocity, y_max_tangential_velocity
+    )
     particles = [
-        WeightedParticle(x + rand(d), y + rand(d), ẋ + rand(ḋ), ẏ + rand(ḋ), 1.0) for
-        _ in 1:n_particles
+        WeightedParticle(
+            x + rand(d),
+            y + rand(d),
+            ẋ + rand(ḋ) + rand(x_undertainty_in_tangential_velocity),
+            ẏ + rand(ḋ) + rand(y_undertainty_in_tangential_velocity),
+            1.0,
+        ) for _ in 1:n_particles
     ]
     return SingleFilter(obs.id, particles, x, y, 0.0)
 end

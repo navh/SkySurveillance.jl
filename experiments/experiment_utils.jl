@@ -2,9 +2,9 @@ include("../src/SkySurveillance.jl")
 using .SkySurveillance:
     BeliefPOMDP, FlatPOMDP, MultiFilterUpdater, RandomSolver, SimpleGreedySolver
 using Dates: format, now
-using POMDPs: solve, simulate, reward, mean
-using POMDPTools: Deterministic, POMDPTools, HistoryRecorder, eachstep
-using Plots: plot, plot!, savefig, @animate, mp4, Plots, pdf
+using POMDPTools: Deterministic, HistoryRecorder, POMDPTools, eachstep
+using POMDPs: mean, reward, simulate, solve
+using Plots: @animate, Plots, mp4, pdf, plot, plot!, savefig
 using Random: Xoshiro
 using TOML
 

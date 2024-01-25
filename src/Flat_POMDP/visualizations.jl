@@ -60,8 +60,8 @@ function POMDPTools.render(pomdp::FlatPOMDP, step::NamedTuple)
             seriestype=:scatter,
             markershape=:xcross,
             markercolor=:red,
-            markersize=25,
-            markerstrokewidth=5,
+            markersize=15,
+            markerstrokewidth=3,
             markerstrokecolor=:black,
         )
     end

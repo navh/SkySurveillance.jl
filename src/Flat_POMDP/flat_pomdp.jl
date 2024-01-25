@@ -115,16 +115,21 @@ end
 
 function target_observation(target)
     # Sensor is at origin so this is all quite simple
-    r = √(target.x^2 + target.y^2)
-    observed_θ = atan(target.y, target.x) # note the reversal
+
+    # TODO: gaussian noise goes here, depends on SNR?
+    # Add in some sort of dθ?
+    dr = Normal(0, 25.0) # range resolution 
+    dθ = Normal(0, 0.01)
+    dv = Normal(0, 6.0) # doppler resolution
+
+    observed_r = √(target.x^2 + target.y^2) + rand(dr)
+    observed_θ = atan(target.y, target.x) + rand(dθ) # note the reversal
     target_local_θ = atan(target.ẏ, target.ẋ) # note the reversal
     target_local_v = √(target.ẋ^2 + target.ẏ^2)
     # TODO: add diagram to README showing how observed_v math works
-    observed_v = cos(target_local_θ - observed_θ) * target_local_v
+    observed_v = cos(target_local_θ - observed_θ) * target_local_v + rand(dv)
 
-    # TODO: gaussian noise goes here, depends on SNR?
-
-    return TargetObservation(target.id, r, observed_θ, observed_v)
+    return TargetObservation(target.id, observed_r, observed_θ, observed_v)
 end
 
 function illumination_observation(pomdp::FlatPOMDP, action::FlatAction, state::FlatState)
