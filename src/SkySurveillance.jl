@@ -4,7 +4,7 @@ using CUDA
 using CommonRLInterface: AbstractEnv
 using Dates: format, now
 using JLD2
-using Distributions: Normal, Uniform
+using Distributions: Normal, Uniform, pdf
 using Flux
 using Flux: glorot_uniform, mse
 using IntervalSets

@@ -19,17 +19,20 @@ function propagate_filter(filter::SingleFilter, time::Number)
 end
 
 function reweight_particle(particle::WeightedParticle, obs_x, obs_y, obs_ẋ, obs_ẏ)
-    # weight = (
-    #     #TODO: grab distributions from below or global these or something
-    #     pdf(Normal(0.0, 25.0), particle.x - obs_x) +
-    #     pdf(Normal(0.0, 25.0), particle.y - obs_y) +
-    #     pdf(Normal(0.0, 6.0), particle.ẋ - obs_ẋ) +
-    #     pdf(Normal(0.0, 6.0), particle.ẏ - obs_ẏ)
-    #     # Should I be adding on some points here for nailing the doppler velocity?
-    #     # The more I think about this, the less that I think it should be related to the other distributions
-    #     # Should this just be 1/(1+RMS) or something?
-    # )
-    weight = 1 / (1 + √((particle.x - obs_x)^2 + (particle.y - obs_y)^2)) # just rms of distance? 
+    weight = (
+        pdf(Normal(0.0, 25.0), particle.x - obs_x) +
+        pdf(Normal(0.0, 25.0), particle.y - obs_y)
+        # pdf(Normal(0.0, 25.0), particle.x - obs_x) +
+        # pdf(Normal(0.0, 25.0), particle.y - obs_y) +
+        # pdf(Normal(0.0, 6.0), particle.ẋ - obs_ẋ) +
+        # pdf(Normal(0.0, 6.0), particle.ẏ - obs_ẏ)
+        # Should I be adding on some points here for nailing the doppler velocity?
+        # The more I think about this, the less that I think it should be related to the other distributions
+        # Should this just be 1/(1+RMS) or something?
+    )
+
+    #weight = 1 / (1 + √((particle.x - obs_x)^2 + (particle.y - obs_y)^2)) # just rms of distance? 
+
     return WeightedParticle(particle.x, particle.y, particle.ẋ, particle.ẏ, weight)
 end
 

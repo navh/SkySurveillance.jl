@@ -118,9 +118,9 @@ function target_observation(target)
 
     # TODO: gaussian noise goes here, depends on SNR?
     # Add in some sort of dθ?
-    dr = Normal(0, 25.0) # range resolution 
-    dθ = Normal(0, 0.01)
-    dv = Normal(0, 6.0) # doppler resolution
+    dr = Normal(0, 1e-8) # range resolution 
+    dθ = Normal(0, 1e-8)
+    dv = Normal(0, 1e-8) # doppler resolution
 
     observed_r = √(target.x^2 + target.y^2) + rand(dr)
     observed_θ = atan(target.y, target.x) + rand(dθ) # note the reversal
