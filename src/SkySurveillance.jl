@@ -38,6 +38,7 @@ include("Flat_POMDP/flat_pomdp.jl")
 include("Flat_POMDP/belief_pomdp.jl")
 include("Flat_POMDP/updater.jl")
 include("Flat_POMDP/solver_random.jl")
+# include("Flat_POMDP/solver_sequential.jl")
 include("Flat_POMDP/solver_simple_net.jl")
 include("Flat_POMDP/visualizations.jl")
 

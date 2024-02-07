@@ -1,11 +1,18 @@
 function propagate_particle(p::WeightedParticle, time::Number)
     return WeightedParticle(
-        p.x + p.ẋ * time + rand(Normal(0.0, 25.0)),
-        p.y + p.ẏ * time + rand(Normal(0.0, 25.0)),
-        p.ẋ + rand(Normal(0.0, 6.0)),
-        p.ẏ + rand(Normal(0.0, 6.0)),
+        p.x + p.ẋ * time,
+        p.y + p.ẏ * time,
+        p.ẋ + rand(Normal(0.0, √(time * (40^2 + 40^2)))),
+        p.ẏ + rand(Normal(0.0, √(time * (40^2 + 40^2)))),
         p.w,
     )
+    # return WeightedParticle(
+    #     p.x + p.ẋ * time + rand(Normal(0.0, 25.0)),
+    #     p.y + p.ẏ * time + rand(Normal(0.0, 25.0)),
+    #     p.ẋ + rand(Normal(0.0, 6.0)),
+    #     p.ẏ + rand(Normal(0.0, 6.0)),
+    #     p.w,
+    # )
 end
 
 function propagate_filter(filter::SingleFilter, time::Number)
@@ -19,19 +26,19 @@ function propagate_filter(filter::SingleFilter, time::Number)
 end
 
 function reweight_particle(particle::WeightedParticle, obs_x, obs_y, obs_ẋ, obs_ẏ)
-    weight = (
-        pdf(Normal(0.0, 25.0), particle.x - obs_x) +
-        pdf(Normal(0.0, 25.0), particle.y - obs_y)
-        # pdf(Normal(0.0, 25.0), particle.x - obs_x) +
-        # pdf(Normal(0.0, 25.0), particle.y - obs_y) +
-        # pdf(Normal(0.0, 6.0), particle.ẋ - obs_ẋ) +
-        # pdf(Normal(0.0, 6.0), particle.ẏ - obs_ẏ)
-        # Should I be adding on some points here for nailing the doppler velocity?
-        # The more I think about this, the less that I think it should be related to the other distributions
-        # Should this just be 1/(1+RMS) or something?
-    )
+    # weight = (
+    #     pdf(Normal(0.0, 25.0), particle.x - obs_x) +
+    #     pdf(Normal(0.0, 25.0), particle.y - obs_y)
+    #     # pdf(Normal(0.0, 25.0), particle.x - obs_x) +
+    #     # pdf(Normal(0.0, 25.0), particle.y - obs_y) +
+    #     # pdf(Normal(0.0, 6.0), particle.ẋ - obs_ẋ) +
+    #     # pdf(Normal(0.0, 6.0), particle.ẏ - obs_ẏ)
+    #     # Should I be adding on some points here for nailing the doppler velocity?
+    #     # The more I think about this, the less that I think it should be related to the other distributions
+    #     # Should this just be 1/(1+RMS) or something?
+    # )
 
-    #weight = 1 / (1 + √((particle.x - obs_x)^2 + (particle.y - obs_y)^2)) # just rms of distance? 
+    weight = 1 / (1 + √((particle.x - obs_x)^2 + (particle.y - obs_y)^2)) # just rms of distance? 
 
     return WeightedParticle(particle.x, particle.y, particle.ẋ, particle.ẏ, weight)
 end
@@ -84,6 +91,13 @@ function weight_sum(filter::SingleFilter)
     return sum([particle.w for particle in filter.particles])
 end
 
+function weighted_centre_of_mass_in_range(filter::SingleFilter, range::Number)
+    w = weight_sum(filter)
+    mean_x = sum([particle.x * particle.w for particle in filter.particles]) / w
+    mean_y = sum([particle.y * particle.w for particle in filter.particles]) / w
+    return √(mean_x^2 + mean_y^2) <= range
+end
+
 function low_variance_resampler(rng::RNG, filter::SingleFilter) where {RNG<:AbstractRNG}
 
     # ps = Array{WeightedParticle}(undef, PARAMS["n_particles"])
@@ -106,8 +120,9 @@ end
 
 @kwdef struct MultiFilterUpdater <: POMDPs.Updater
     rng::AbstractRNG
-    dwell_time_seconds::Float32
-    n_particles_per_filter::Int
+    dwell_time_seconds::Number
+    n_particles_per_filter::Number
+    max_range::Number
 end
 
 function POMDPs.initialize_belief(up::MultiFilterUpdater, d)
@@ -137,6 +152,9 @@ function POMDPs.update(up::MultiFilterUpdater, belief_old, action, observation)
         ) for filter in observed_filters
     ]
 
+    # Resampling - a new collection of state particles is generated with particle. frequencies proportional to the new weights
+    resampled_filters = [low_variance_resampler(up.rng, f) for f in reweighted_filters] # O(n) resampler, page 110 of Probabilistic Robotics by Thurn, Burgard, and Fox.
+
     # 2.3) - Filterless observations, initialize a new filter
     new_observations = filter(o -> o.id ∉ [f.id for f in propagated_belief], observation)
 
@@ -144,8 +162,8 @@ function POMDPs.update(up::MultiFilterUpdater, belief_old, action, observation)
         initialize_filter(o, up.n_particles_per_filter) for o in new_observations
     ]
 
-    all_filters = vcat(no_observed_filters, reweighted_filters, new_filters)
+    all_filters = vcat(no_observed_filters, resampled_filters, new_filters)
 
-    # 3) Resampling - a new collection of state particles is generated with particle. frequencies proportional to the new weights
-    return [low_variance_resampler(up.rng, f) for f in all_filters] # O(n) resampler, page 110 of Probabilistic Robotics by Thurn, Burgard, and Fox.
+    # Throw out filters with a centre of mass outside the visible range
+    return filter(f -> weighted_centre_of_mass_in_range(f, up.max_range), all_filters)
 end

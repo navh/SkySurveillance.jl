@@ -75,6 +75,9 @@ child_pomdp = FlatPOMDP(;
     target_reappearing_distribution=Deterministic(0), # was Uniform(-50, 0)
 )
 u = MultiFilterUpdater(
-    child_pomdp.rng, child_pomdp.dwell_time_seconds, child_pomdp.n_particles
+    child_pomdp.rng,
+    child_pomdp.dwell_time_seconds,
+    child_pomdp.n_particles,
+    child_pomdp.radar_max_range_meters,
 )
 pomdp = BeliefPOMDP(child_pomdp.rng, child_pomdp, u)

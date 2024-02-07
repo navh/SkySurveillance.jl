@@ -4,7 +4,6 @@
 # TODO: add beamwidth selection to action space
 # TODO: add target size to target attributes, use snr math to illuminate targets, 0.01m^3 bird to 500m^3 747
 
-# mutable struct FlatPOMDP <: POMDP{FlatState,FlatAction,FlatObservation} # POMDP{State, Action, Observation}
 @kwdef struct FlatPOMDP <: POMDP{FlatState,FlatAction,FlatObservation} # POMDP{State, Action, Observation}
     rng::AbstractRNG
     discount::Float64
@@ -118,9 +117,12 @@ function target_observation(target)
 
     # TODO: gaussian noise goes here, depends on SNR?
     # Add in some sort of dθ?
-    dr = Normal(0, 1e-8) # range resolution 
-    dθ = Normal(0, 1e-8)
-    dv = Normal(0, 1e-8) # doppler resolution
+    # dr = Normal(0, 1e-8) # range resolution
+    # dθ = Normal(0, 1e-8)
+    # dv = Normal(0, 1e-8) # doppler resolution
+    dr = Normal(0, 5) # range resolution
+    dθ = Normal(0, 3 * π / 180)
+    dv = Normal(0, 0.5) # doppler resolution
 
     observed_r = √(target.x^2 + target.y^2) + rand(dr)
     observed_θ = atan(target.y, target.x) + rand(dθ) # note the reversal
