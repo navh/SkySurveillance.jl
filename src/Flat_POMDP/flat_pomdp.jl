@@ -6,17 +6,17 @@
 
 @kwdef struct FlatPOMDP <: POMDP{FlatState,FlatAction,FlatObservation} # POMDP{State, Action, Observation}
     rng::AbstractRNG
-    discount::Float64
+    discount::Number
     number_of_targets::Int64
-    beamwidth_rad::Float64
-    radar_min_range_meters::Int64
-    radar_max_range_meters::Int64
+    beamwidth_rad::Number
+    radar_min_range_meters::Number
+    radar_max_range_meters::Number
     n_particles::Int64
-    xy_min_meters::Float64
-    xy_max_meters::Float64
-    dwell_time_seconds::Float64 # ∈ [10ms,40ms] # from Jack
-    target_velocity_max_meters_per_second::Float64 # rounded up f-22 top speed is 700m/s
-    target_reappearing_distribution::Deterministic{Int64} # should be some generic 'distribution' type
+    xy_min_meters::Number
+    xy_max_meters::Number
+    dwell_time_seconds::Number # ∈ [10ms,40ms] # from Jack
+    target_velocity_max_meters_per_second::Number # rounded up f-22 top speed is 700m/s
+    target_reappearing_distribution::Sampleable
 end
 
 function POMDPs.isterminal(pomdp::FlatPOMDP, s::FlatState)
@@ -93,7 +93,6 @@ end
 # observations 
 
 function action_to_rad(action::FlatAction)
-    # could also do -1 to 1 and just multiply by pi
     return action * 2π - π # atan returns ∈ [-π,π], so lets just play nice
 end
 
@@ -108,8 +107,7 @@ end
 function target_in_beam(target::Target, action::FlatAction, beamwidth::Number)
     target_θ = atan(target.y, target.x)
     # TODO: check this around -pi to pi transition
-    #return abs((target_θ - action_to_rad(action)) % π) < beamwidth # atan ∈ [-π,π] 
-    return abs((target_θ - action_to_rad(action))) < beamwidth # TODO: tried to fix the 180 prob, unsure about new issues around 0-1 transition?
+    return abs((target_θ - action_to_rad(action))) < beamwidth / 2 # TODO: tried to fix the 180 prob, unsure about new issues around 0-1 transition?
 end
 
 function target_observation(target)

@@ -1,10 +1,9 @@
 include("../src/SkySurveillance.jl")
-using .SkySurveillance:
-    BeliefPOMDP, FlatPOMDP, MultiFilterUpdater, RandomSolver, SimpleGreedySolver
+using .SkySurveillance
 using Dates: format, now
+using Distributions: Uniform
 using POMDPTools: Deterministic, HistoryRecorder, POMDPTools, eachstep
 using POMDPs: mean, reward, simulate, solve
-using Plots: @animate, Plots, mp4, pdf, plot, plot!, savefig
 using Random: Xoshiro
 using TOML
 
@@ -72,7 +71,7 @@ child_pomdp = FlatPOMDP(;
     xy_max_meters=PARAMS["radar_max_range_meters"],
     dwell_time_seconds=PARAMS["dwell_time_seconds"],
     target_velocity_max_meters_per_second=PARAMS["target_velocity_max_meters_per_second"],
-    target_reappearing_distribution=Deterministic(0), # was Uniform(-50, 0)
+    target_reappearing_distribution=Uniform(-50, 0), # or Deterministic(0)
 )
 u = MultiFilterUpdater(
     child_pomdp.rng,

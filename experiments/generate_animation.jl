@@ -1,14 +1,17 @@
 include("experiment_utils.jl") # Sets up the BMDP
+using Plots: @animate, Plots, mp4
 
-solver = SimpleGreedySolver(;
-    pomdp=pomdp,
-    n_epochs=PARAMS["n_epochs"],
-    n_train_episodes=PARAMS["n_train_episodes"],
-    n_test_episodes=PARAMS["n_test_episodes"],
-    n_skip_first_steps=PARAMS["n_skip_first_steps"],
-    n_steps_per_episode=PARAMS["n_steps_per_episode"],
-    monte_carlo_rollouts=PARAMS["monte_carlo_rollouts"],
-)
+# solver = SimpleGreedySolver(;
+#     pomdp=pomdp,
+#     n_epochs=PARAMS["n_epochs"],
+#     n_train_episodes=PARAMS["n_train_episodes"],
+#     n_test_episodes=PARAMS["n_test_episodes"],
+#     n_skip_first_steps=PARAMS["n_skip_first_steps"],
+#     n_steps_per_episode=PARAMS["n_steps_per_episode"],
+#     monte_carlo_rollouts=PARAMS["monte_carlo_rollouts"],
+# )
+solver = SequentialSolver()
+
 policy = solve(solver, pomdp)
 
 hr = HistoryRecorder(; max_steps=PARAMS["animation_steps"])

@@ -41,8 +41,8 @@ function POMDPTools.render(pomdp::FlatPOMDP, step::NamedTuple)
     )
 
     # Draw action beam
-    left = action_to_rad(step.a) - pomdp.beamwidth_rad
-    right = action_to_rad(step.a) + pomdp.beamwidth_rad
+    left = action_to_rad(step.a) - pomdp.beamwidth_rad / 2
+    right = action_to_rad(step.a) + pomdp.beamwidth_rad / 2
     beam = Shape(
         [
             (0.0, 0.0)

@@ -99,9 +99,6 @@ function weighted_centre_of_mass_in_range(filter::SingleFilter, range::Number)
 end
 
 function low_variance_resampler(rng::RNG, filter::SingleFilter) where {RNG<:AbstractRNG}
-
-    # ps = Array{WeightedParticle}(undef, PARAMS["n_particles"])
-    # r = rand(rng) * weight_sum(filter) / PARAMS["n_particles"]
     ps = Array{WeightedParticle}(undef, length(filter.particles))
     r = rand(rng) * weight_sum(filter) / length(filter.particles)
     i = 1
