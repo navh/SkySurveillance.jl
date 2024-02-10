@@ -39,9 +39,9 @@ end
 struct SingleFilter
     id::Int32
     particles::Vector{WeightedParticle}
-    last_x::Float32
-    last_y::Float32
-    last_t::Float32
+    # last_x::Float32
+    # last_y::Float32
+    # last_t::Float32
 end
 
 MultiFilterBelief = Array{SingleFilter}

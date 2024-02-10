@@ -1,63 +1,30 @@
 function propagate_particle(p::WeightedParticle, time::Number)
     return WeightedParticle(
-        p.x + p.ẋ * time,
-        p.y + p.ẏ * time,
+        p.x + time * p.ẋ,
+        p.y + time * p.ẏ,
+        # p.ẋ + time * rand(Normal(0.0, √(time * (40^2 + 40^2)))), # Still too little variance 
+        # p.ẏ + time * rand(Normal(0.0, √(time * (40^2 + 40^2)))),
         p.ẋ + rand(Normal(0.0, √(time * (40^2 + 40^2)))),
         p.ẏ + rand(Normal(0.0, √(time * (40^2 + 40^2)))),
         p.w,
     )
-    # return WeightedParticle(
-    #     p.x + p.ẋ * time + rand(Normal(0.0, 25.0)),
-    #     p.y + p.ẏ * time + rand(Normal(0.0, 25.0)),
-    #     p.ẋ + rand(Normal(0.0, 6.0)),
-    #     p.ẏ + rand(Normal(0.0, 6.0)),
-    #     p.w,
-    # )
 end
 
 function propagate_filter(filter::SingleFilter, time::Number)
     return SingleFilter(
-        filter.id,
-        [propagate_particle(particle, time) for particle in filter.particles],
-        filter.last_x,
-        filter.last_y,
-        filter.last_t + time,
+        filter.id, [propagate_particle(particle, time) for particle in filter.particles]
     )
 end
 
-function reweight_particle(particle::WeightedParticle, obs_x, obs_y, obs_ẋ, obs_ẏ)
-    # weight = (
-    #     pdf(Normal(0.0, 25.0), particle.x - obs_x) +
-    #     pdf(Normal(0.0, 25.0), particle.y - obs_y)
-    #     # pdf(Normal(0.0, 25.0), particle.x - obs_x) +
-    #     # pdf(Normal(0.0, 25.0), particle.y - obs_y) +
-    #     # pdf(Normal(0.0, 6.0), particle.ẋ - obs_ẋ) +
-    #     # pdf(Normal(0.0, 6.0), particle.ẏ - obs_ẏ)
-    #     # Should I be adding on some points here for nailing the doppler velocity?
-    #     # The more I think about this, the less that I think it should be related to the other distributions
-    #     # Should this just be 1/(1+RMS) or something?
-    # )
-
+function reweight_particle(particle::WeightedParticle, obs_x, obs_y)
     weight = 1 / (1 + √((particle.x - obs_x)^2 + (particle.y - obs_y)^2)) # just rms of distance? 
-
     return WeightedParticle(particle.x, particle.y, particle.ẋ, particle.ẏ, weight)
 end
 
 function reweight_filter(filter::SingleFilter, obs)
     x = obs.r * cos(obs.θ)
     y = obs.r * sin(obs.θ)
-    ẋ = (x - filter.last_x) / filter.last_t # TODO: should I be using v at all here?
-    ẏ = (y - filter.last_y) / filter.last_t
-
-    # Throw away particles not moving in the right direction.
-
-    return SingleFilter(
-        filter.id,
-        [reweight_particle(particle, x, y, ẋ, ẏ) for particle in filter.particles],
-        x,
-        y,
-        0.0,
-    )
+    return SingleFilter(filter.id, [reweight_particle(p, x, y) for p in filter.particles])
 end
 
 function initialize_filter(obs, n_particles::Int)
@@ -84,7 +51,7 @@ function initialize_filter(obs, n_particles::Int)
             1.0,
         ) for _ in 1:n_particles
     ]
-    return SingleFilter(obs.id, particles, x, y, 0.0)
+    return SingleFilter(obs.id, particles)
 end
 
 function weight_sum(filter::SingleFilter)
@@ -92,6 +59,10 @@ function weight_sum(filter::SingleFilter)
 end
 
 function weighted_centre_of_mass_in_range(filter::SingleFilter, range::Number)
+    # Note: This isn't aggressive enough, if we only get a few scans very close to an edge it'll still just diverge forever
+    # Consider giving filters some 'time to live' where they kill themselves after N timesteps without seeing a target?
+    # Or just if some number (say 20%?) swim out of range then kill the whole thing? 
+    # It's really just the special "one scan close to and edge and the target leaves" case that really makes a mess.
     w = weight_sum(filter)
     mean_x = sum([particle.x * particle.w for particle in filter.particles]) / w
     mean_y = sum([particle.y * particle.w for particle in filter.particles]) / w
@@ -112,7 +83,7 @@ function low_variance_resampler(rng::RNG, filter::SingleFilter) where {RNG<:Abst
         U += weight_sum(filter) / length(filter.particles)
         ps[m] = filter.particles[i]
     end
-    return SingleFilter(filter.id, ps, filter.last_x, filter.last_y, filter.last_t)
+    return SingleFilter(filter.id, ps)
 end
 
 @kwdef struct MultiFilterUpdater <: POMDPs.Updater
@@ -122,7 +93,7 @@ end
     max_range::Number
 end
 
-function POMDPs.initialize_belief(up::MultiFilterUpdater, d)
+function POMDPs.initialize_belief(_::MultiFilterUpdater, _)
     return SingleFilter[]
 end
 

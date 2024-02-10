@@ -1,14 +1,10 @@
-@kwdef struct SequentialSolver <: Solver end
+struct SequentialSolver <: Solver end
 
 function POMDPs.solve(solver::SequentialSolver, pomdp::BeliefPOMDP)
     min_beam_θ = -π
     max_beam_θ = π
     increment_step = pomdp.underlying_pomdp.beamwidth_rad / (max_beam_θ - min_beam_θ)
     return IncrementerPolicy(increment_step)
-end
-
-function action_observation(action, observation)
-    return Vector{Float32}(vcat(action, observation))
 end
 
 struct IncrementerPolicy <: Policy
@@ -27,7 +23,7 @@ end
 struct LastActionUpdater <: POMDPs.Updater end
 
 function POMDPs.initialize_belief(up::LastActionUpdater, state)
-    return 0.5
+    return 0.0
 end
 
 function POMDPs.update(up::LastActionUpdater, b, a, o)

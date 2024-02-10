@@ -3,11 +3,11 @@ module SkySurveillance
 using CUDA
 using CommonRLInterface: AbstractEnv
 using Dates: format, now
-using JLD2
-using Distributions: Normal, Uniform, pdf, Sampleable
+using Distributions: Normal, Sampleable, Uniform, pdf
 using Flux
 using Flux: glorot_uniform, mse
 using IntervalSets
+using JLD2
 using POMDPTools.BeliefUpdaters: NothingUpdater, PreviousObservationUpdater
 using POMDPTools.Simulators: Sim, run_parallel, stepthrough
 using POMDPTools:
@@ -15,14 +15,19 @@ using POMDPTools:
 using POMDPs:
     POMDP, POMDPs, Policy, Solver, Updater, discount, isterminal, reward, simulate, solve
 using Plots:
-    Plots, RGB, Shape, distinguishable_colors, mp4, plot, plot!, pdf, savefig, pgfplotsx
+    Plots, RGB, Shape, distinguishable_colors, mp4, pdf, pgfplotsx, plot, plot!, savefig
 using Random: AbstractRNG, Xoshiro
 using StaticArrays: SVector
 using Statistics: mean, var
 using TOML: parse, parsefile
 
 export FlatPOMDP,
-    MultiFilterUpdater, BeliefPOMDP, RandomSolver, SimpleGreedySolver, SequentialSolver
+    MultiFilterUpdater,
+    BeliefPOMDP,
+    RandomSolver,
+    SimpleGreedySolver,
+    SequentialSolver,
+    HighestVarianceSolver
 
 include("Flat_POMDP/types.jl")
 include("Flat_POMDP/flat_pomdp.jl")
@@ -30,6 +35,7 @@ include("Flat_POMDP/belief_pomdp.jl")
 include("Flat_POMDP/updater.jl")
 include("Flat_POMDP/solver_random.jl")
 include("Flat_POMDP/solver_sequential.jl")
+include("Flat_POMDP/solver_highest_variance.jl")
 include("Flat_POMDP/solver_simple_net.jl")
 include("Flat_POMDP/visualizations.jl")
 
