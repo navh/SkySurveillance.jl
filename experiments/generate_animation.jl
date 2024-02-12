@@ -10,7 +10,8 @@ using Plots: @animate, Plots, mp4
 #     n_steps_per_episode=PARAMS["n_steps_per_episode"],
 #     monte_carlo_rollouts=PARAMS["monte_carlo_rollouts"],
 # )
-solver = SequentialSolver()
+# solver = SequentialSolver()
+solver = HighestVarianceSolver()
 
 policy = solve(solver, pomdp)
 
