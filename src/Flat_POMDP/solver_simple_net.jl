@@ -1,3 +1,8 @@
+# NOTE: Down on observation_summary_vector implementation, this used to keep zygote happy and now it is sad.
+# I think it came in the midst of changing some f64 to f32, but it seems like it's a push!() problem wanting
+# some sort of a zygote-specific buffer. 
+# For now I am abandoning this entire approach in favor of a more 'conventional' MCTS with DPW from pomdps.jl 
+
 @kwdef struct SimpleGreedySolver <: Solver
     pomdp::BeliefPOMDP
     n_epochs::Int
@@ -109,16 +114,19 @@ function observation_summary_vector(belief, number_of_targets)
         (filter_mean_θ(filter), filter_variance(filter)) for filter in belief
     )
 
+    # This push! nonsense was cooperating, but now Zygote hates it
+    # I need to use some zygote.buffer() nonsense, but I'm just going to abandon this for now
+    # I think a better use of time is the transformers paper above, or some similar 'more direct' variant.
     for (θ, var) in θs_and_variances
         push!(s, θ)
         push!(s, var)
     end
     # Add on padding 
-    # while length(s) < 2 * number_of_targets
-    while length(s) < 20
+    while length(s) < 2 * number_of_targets
         push!(s, 0.0)
     end
-    return SVector{length(s),Float32}(s)
+    return s
+    # return SVector{length(s),Float32}(s)
 end
 
 function action_observation(action, observation)
