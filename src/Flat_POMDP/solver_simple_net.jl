@@ -41,7 +41,10 @@ function POMDPs.solve(solver::SimpleGreedySolver, pomdp::BeliefPOMDP)
                 i += 1
                 if i > solver.n_skip_first_steps
                     grads = Flux.gradient(model) do _
-                        result = model(action_observation(a, o))
+                        summary = observation_summary_vector(
+                            o, pomdp.underlying_pomdp.number_of_targets
+                        )
+                        result = model(action_observation(a, summary))
                         typeof(result)
                         mse(result, r)
                     end
@@ -65,7 +68,10 @@ function POMDPs.solve(solver::SimpleGreedySolver, pomdp::BeliefPOMDP)
             )
                 i += 1
                 if i > solver.n_skip_first_steps
-                    result = model(action_observation(a, o))
+                    summary = observation_summary_vector(
+                        o, pomdp.underlying_pomdp.number_of_targets
+                    )
+                    result = model(action_observation(a, summary))
                     sum_loss += mse(result, r)
                     count_loss += 1
                 end
@@ -82,24 +88,56 @@ function POMDPs.solve(solver::SimpleGreedySolver, pomdp::BeliefPOMDP)
     # mkpath(PARAMS["model_path"])
     # jldsave("$(run_time)-trained.jld2"; opt_state)
 
-    return MCTwigSPolicy(model, solver.monte_carlo_rollouts)
+    return MCTwigSPolicy(
+        model, solver.monte_carlo_rollouts, pomdp.underlying_pomdp.number_of_targets
+    )
+end
+
+function observation_summary_vector(belief, number_of_targets)
+    # The actual answer is https://arxiv.org/abs/1910.06764 , but padding will have to do for now
+
+    θs_and_variances = sort([
+        (filter_mean_θ(filter), filter_variance(filter)) for filter in belief
+    ]) # wait, is sorting even helping? feels like it should but it doesn't seem to care
+    # θs_and_variances = (
+    #     (filter_mean_θ(filter), filter_variance(filter)) for filter in belief
+    # )
+
+    # s = zeros(Float32, 2 * number_of_targets)  
+    s = []
+    θs_and_variances = (
+        (filter_mean_θ(filter), filter_variance(filter)) for filter in belief
+    )
+
+    for (θ, var) in θs_and_variances
+        push!(s, θ)
+        push!(s, var)
+    end
+    # Add on padding 
+    # while length(s) < 2 * number_of_targets
+    while length(s) < 20
+        push!(s, 0.0)
+    end
+    return SVector{length(s),Float32}(s)
 end
 
 function action_observation(action, observation)
-    # return SVector{INPUT_WIDTH,Float32}(vcat(action, observation))
+    #return SVector{length(action) + length(observation),Float32}(vcat(action, observation))
     return Vector{Float32}(vcat(action, observation))
 end
 
-function monte_carlo_twig_search(model, observation, action_space, n_rollouts)
+function monte_carlo_twig_search(model, observation, action_space, n_rollouts, max_targets)
+    #todo - just jam this all in the action space because unpacking the entire policy this way is silly 
+    summary = observation_summary_vector(observation, max_targets)
     best_action = rand(action_space)
 
-    if sum(observation) == 0.0
+    if sum(summary) == 0.0
         return best_action
     end
 
-    best_estimate = model(action_observation(best_action, observation))
+    best_estimate = model(action_observation(best_action, summary))
     for a in rand(action_space, n_rollouts)
-        estimate = model(action_observation(a, observation))
+        estimate = model(action_observation(a, summary))
         if estimate > best_estimate
             best_estimate = estimate
             best_action = a
@@ -111,6 +149,7 @@ end
 struct MCTwigSPolicy{M<:Flux.Chain} <: Policy
     model::M
     n_rollouts::Int
+    max_targets::Int
 end
 
 function POMDPs.updater(::MCTwigSPolicy)
@@ -119,7 +158,7 @@ end
 
 function POMDPs.action(p::MCTwigSPolicy, b::SVector)
     # TODO: replace uniform(0,1) with some action_space(p.model) or something
-    return monte_carlo_twig_search(p.model, b, Uniform(0, 1), p.n_rollouts)
+    return monte_carlo_twig_search(p.model, b, Uniform(0, 1), p.n_rollouts, p.max_targets)
 end
 
 function POMDPs.action(p::MCTwigSPolicy, b)

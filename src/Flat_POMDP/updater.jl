@@ -2,12 +2,21 @@ function propagate_particle(p::WeightedParticle, time::Number)
     return WeightedParticle(
         p.x + time * p.ẋ,
         p.y + time * p.ẏ,
-        # p.ẋ + time * rand(Normal(0.0, √(time * (40^2 + 40^2)))), # Still too little variance 
-        # p.ẏ + time * rand(Normal(0.0, √(time * (40^2 + 40^2)))),
-        p.ẋ + rand(Normal(0.0, √(time * (40^2 + 40^2)))),
-        p.ẏ + rand(Normal(0.0, √(time * (40^2 + 40^2)))),
+        p.ẋ + time * rand(Normal(0.0, √(time * (40^2 + 40^2)))), # Still too little variance
+        p.ẏ + time * rand(Normal(0.0, √(time * (40^2 + 40^2)))),
+        # p.ẋ + rand(Normal(0.0, √(time * (40^2 + 40^2)))),
+        # p.ẏ + rand(Normal(0.0, √(time * (40^2 + 40^2)))),
         p.w,
     )
+end
+
+function filter_variance(filter::SingleFilter)
+    #TODO: should this be std?
+    return var([particle.x for particle in filter.particles]) + var([particle.y for particle in filter.particles])
+end
+
+function filter_mean_θ(filter::SingleFilter)
+    return mean([atan(particle.y, particle.x) for particle in filter.particles])
 end
 
 function propagate_filter(filter::SingleFilter, time::Number)

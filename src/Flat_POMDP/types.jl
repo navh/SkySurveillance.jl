@@ -7,16 +7,12 @@ struct Target
     ẏ::Float32
 end
 
-# struct FlatState
-#     targets::SVector{PARAMS["number_of_targets"],Target}
-# end
-
 struct FlatState
     targets::Vector{Target}
 end
 
 struct TargetObservation
-    id::Int32  # unique target id
+    id::UInt32 # unique target id
     r::Float32 # range (meters)
     θ::Float32 # azimuth (radians)
     v::Float32 # radial velocity (meters/second)
@@ -24,8 +20,9 @@ end
 
 FlatObservation = Vector{TargetObservation}
 
-FlatAction = Float64 # Must be left 64 due to rand(uniform(f32,f32)) unwaveringly returning f64
-# To play nice with MCTS should I just pick wedges?
+FlatAction = Number
+# FlatAction = Float64 # Must be Float64 due to rand(uniform(f32,f32)) unwaveringly returning f64
+# I guess now could be a 'number'
 # Eventually I'd like Tuple{Float32,Float32,Float32} # azimuth, beamwidth, dwell_time
 
 struct WeightedParticle
@@ -39,9 +36,6 @@ end
 struct SingleFilter
     id::Int32
     particles::Vector{WeightedParticle}
-    # last_x::Float32
-    # last_y::Float32
-    # last_t::Float32
 end
 
 MultiFilterBelief = Array{SingleFilter}

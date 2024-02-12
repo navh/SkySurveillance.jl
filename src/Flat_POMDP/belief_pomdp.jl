@@ -61,34 +61,36 @@ function generate_o(
     sp::UpdaterState,
     rng::AbstractRNG,
 )
-    # return s.belief_state
-    return belief_to_observation(pomdp, s.belief_state)
+    return s.belief_state
+    # return belief_to_observation(pomdp, s.belief_state)
 end
 
-function filter_variance(filter::SingleFilter)
-    return var([particle.x for particle in filter.particles]) + var([particle.y for particle in filter.particles])
-end
-
-function filter_mean_θ(filter::SingleFilter)
-    return mean([atan(particle.y, particle.x) for particle in filter.particles])
-end
-
-function belief_to_observation(pomdp::BeliefPOMDP, belief)
-    θs_and_variances = sort([
-        (filter_mean_θ(filter), filter_variance(filter)) for filter in belief
-    ])
-
-    s = []
-    for (θ, var) in θs_and_variances
-        push!(s, θ)
-        push!(s, var)
-    end
-    while length(s) < 2 * pomdp.underlying_pomdp.number_of_targets
-        push!(s, 0.0)
-    end
-    return SVector{2 * pomdp.underlying_pomdp.number_of_targets,Float32}(s)
-end
-
+# TODO: delete this, it has been moved to teh solver simple net
+#
+# function filter_variance(filter::SingleFilter)
+#     return var([particle.x for particle in filter.particles]) + var([particle.y for particle in filter.particles])
+# end
+#
+# function filter_mean_θ(filter::SingleFilter)
+#     return mean([atan(particle.y, particle.x) for particle in filter.particles])
+# end
+#
+# function belief_summary_vector(pomdp::BeliefPOMDP, belief)
+#     θs_and_variances = sort([
+#         (filter_mean_θ(filter), filter_variance(filter)) for filter in belief
+#     ])
+#
+#     s = []
+#     for (θ, var) in θs_and_variances
+#         push!(s, θ)
+#         push!(s, var)
+#     end
+#     while length(s) < 2 * pomdp.underlying_pomdp.number_of_targets
+#         push!(s, 0.0)
+#     end
+#     return SVector{2 * pomdp.underlying_pomdp.number_of_targets,Float32}(s)
+# end
+#
 ### transitions
 
 function generate_s(
