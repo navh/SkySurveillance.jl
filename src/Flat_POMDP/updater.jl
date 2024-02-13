@@ -2,10 +2,8 @@ function propagate_particle(p::WeightedParticle, time::Number)
     return WeightedParticle(
         p.x + time * p.ẋ,
         p.y + time * p.ẏ,
-        p.ẋ + time * rand(Normal(0.0, √(time * (40^2 + 40^2)))), # Still too little variance
-        p.ẏ + time * rand(Normal(0.0, √(time * (40^2 + 40^2)))),
-        # p.ẋ + rand(Normal(0.0, √(time * (40^2 + 40^2)))),
-        # p.ẏ + rand(Normal(0.0, √(time * (40^2 + 40^2)))),
+        p.ẋ + rand(Normal(0.0, √(time * (40^2 + 40^2)))), # should it be time times this? 
+        p.ẏ + rand(Normal(0.0, √(time * (40^2 + 40^2)))),
         p.w,
     )
 end
@@ -17,6 +15,10 @@ end
 
 function filter_mean_θ(filter::SingleFilter)
     return mean([atan(particle.y, particle.x) for particle in filter.particles])
+end
+
+function filter_variance_below_max(filter::SingleFilter, max_variance)
+    return filter_variance(filter) <= max_variance
 end
 
 function propagate_filter(filter::SingleFilter, time::Number)
@@ -100,6 +102,7 @@ end
     dwell_time_seconds::Number
     n_particles_per_filter::Number
     max_range::Number
+    max_variance::Number
 end
 
 function POMDPs.initialize_belief(_::MultiFilterUpdater, _)
@@ -142,5 +145,9 @@ function POMDPs.update(up::MultiFilterUpdater, belief_old, action, observation)
     all_filters = vcat(no_observed_filters, resampled_filters, new_filters)
 
     # Throw out filters with a centre of mass outside the visible range
-    return filter(f -> weighted_centre_of_mass_in_range(f, up.max_range), all_filters)
+    visible_filters = filter(
+        f -> weighted_centre_of_mass_in_range(f, up.max_range), all_filters
+    )
+
+    return filter(f -> filter_variance_below_max(f, up.max_variance), all_filters)
 end
