@@ -4,6 +4,7 @@ using Dates: format, now
 using Distributions: Uniform
 using POMDPTools: Deterministic, HistoryRecorder, POMDPTools, eachstep
 using POMDPs: mean, reward, simulate, solve
+using Plots: @animate, Plots, mp4, pdf, plot, plot!, savefig
 using Random: Xoshiro
 using TOML
 
@@ -11,17 +12,18 @@ run_time = format(now(), "YYYYmmdd-HHMMSS-sss")
 @info "Run: $(run_time)"
 
 PARAMS = Dict(
-    "seed" => 0,
+    "seed" => 1,
     "render" => true,
-    "animation_steps" => 1000,
+    "animation_steps" => 1200,
     "output_path" => "./out",
-    "number_of_targets" => 10,
-    "beamwidth_degrees" => 10,
+    "number_of_targets" => 20,
+    "beamwidth_degrees" => 360 / 20, # 20 slices
     "radar_min_range_meters" => 500,
     "radar_max_range_meters" => 500_000,
     "dwell_time_seconds" => 200e-3,
     "target_velocity_max_meters_per_second" => 700,
     "n_particles" => 200,
+    "maximum_filter_variance" => 1e9,
     "n_epochs" => 1,
     "n_train_episodes" => 10,
     "n_test_episodes" => 10,
@@ -71,12 +73,13 @@ child_pomdp = FlatPOMDP(;
     xy_max_meters=PARAMS["radar_max_range_meters"],
     dwell_time_seconds=PARAMS["dwell_time_seconds"],
     target_velocity_max_meters_per_second=PARAMS["target_velocity_max_meters_per_second"],
-    target_reappearing_distribution=Uniform(-50, 0), # or Deterministic(0)
+    target_reappearing_distribution=Uniform(-500, 0),
 )
 u = MultiFilterUpdater(
     child_pomdp.rng,
     child_pomdp.dwell_time_seconds,
     child_pomdp.n_particles,
     child_pomdp.radar_max_range_meters,
+    PARAMS["maximum_filter_variance"],
 )
 pomdp = BeliefPOMDP(child_pomdp.rng, child_pomdp, u)

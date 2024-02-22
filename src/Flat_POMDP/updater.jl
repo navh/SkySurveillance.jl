@@ -1,15 +1,18 @@
-function propagate_particle(p::WeightedParticle, time::Number)
+function propagate_particle(rng::AbstractRNG, p::WeightedParticle, time::Number)
+    ẍ = rand(rng, Normal(0.0, √(80^2)))
+    ÿ = rand(rng, Normal(0.0, √(80^2)))
     return WeightedParticle(
-        p.x + time * p.ẋ,
-        p.y + time * p.ẏ,
-        p.ẋ + rand(Normal(0.0, √(time * (40^2 + 40^2)))), # should it be time times this? 
-        p.ẏ + rand(Normal(0.0, √(time * (40^2 + 40^2)))),
+        p.x + p.ẋ * time + ẍ / 2 * time^2,
+        p.y + p.ẏ * time + ÿ / 2 * time^2,
+        p.ẋ + ẍ * time,
+        p.ẏ + ÿ * time,
         p.w,
     )
 end
 
 function filter_variance(filter::SingleFilter)
     #TODO: should this be std?
+    #TODO: should this be /2?
     return var([particle.x for particle in filter.particles]) + var([particle.y for particle in filter.particles])
 end
 
@@ -21,9 +24,10 @@ function filter_variance_below_max(filter::SingleFilter, max_variance)
     return filter_variance(filter) <= max_variance
 end
 
-function propagate_filter(filter::SingleFilter, time::Number)
+function propagate_filter(rng::AbstractRNG, filter::SingleFilter, time::Number)
     return SingleFilter(
-        filter.id, [propagate_particle(particle, time) for particle in filter.particles]
+        filter.id,
+        [propagate_particle(rng, particle, time) for particle in filter.particles],
     )
 end
 
@@ -38,7 +42,7 @@ function reweight_filter(filter::SingleFilter, obs)
     return SingleFilter(filter.id, [reweight_particle(p, x, y) for p in filter.particles])
 end
 
-function initialize_filter(obs, n_particles::Int)
+function initialize_filter(rng::AbstractRNG, obs, n_particles::Int)
     x = obs.r * cos(obs.θ)
     y = obs.r * sin(obs.θ)
     ẋ = obs.v * cos(obs.θ)
@@ -55,10 +59,10 @@ function initialize_filter(obs, n_particles::Int)
     )
     particles = [
         WeightedParticle(
-            x + rand(d),
-            y + rand(d),
-            ẋ + rand(ḋ) + rand(x_undertainty_in_tangential_velocity),
-            ẏ + rand(ḋ) + rand(y_undertainty_in_tangential_velocity),
+            x + rand(rng, d),
+            y + rand(rng, d),
+            ẋ + rand(rng, ḋ) + rand(rng, x_undertainty_in_tangential_velocity),
+            ẏ + rand(rng, ḋ) + rand(rng, y_undertainty_in_tangential_velocity),
             1.0,
         ) for _ in 1:n_particles
     ]
@@ -74,6 +78,7 @@ function weighted_centre_of_mass_in_range(filter::SingleFilter, range::Number)
     # Consider giving filters some 'time to live' where they kill themselves after N timesteps without seeing a target?
     # Or just if some number (say 20%?) swim out of range then kill the whole thing? 
     # It's really just the special "one scan close to and edge and the target leaves" case that really makes a mess.
+    # Just use the true target
     w = weight_sum(filter)
     mean_x = sum([particle.x * particle.w for particle in filter.particles]) / w
     mean_y = sum([particle.y * particle.w for particle in filter.particles]) / w
@@ -115,7 +120,7 @@ function POMDPs.update(up::MultiFilterUpdater, belief_old, action, observation)
     # TODO: pack 'time' in with action?
     time = up.dwell_time_seconds
 
-    propagated_belief = [propagate_filter(filter, time) for filter in belief_old]
+    propagated_belief = [propagate_filter(up.rng, filter, time) for filter in belief_old]
 
     # 2) Reweighting - an explicit measurement (observation) model is used to calculate a new weight
     ### 3 cases: observationless filters, observed filters, filterless observations 
@@ -139,7 +144,7 @@ function POMDPs.update(up::MultiFilterUpdater, belief_old, action, observation)
     new_observations = filter(o -> o.id ∉ [f.id for f in propagated_belief], observation)
 
     new_filters = [
-        initialize_filter(o, up.n_particles_per_filter) for o in new_observations
+        initialize_filter(up.rng, o, up.n_particles_per_filter) for o in new_observations
     ]
 
     all_filters = vcat(no_observed_filters, resampled_filters, new_filters)
@@ -149,5 +154,5 @@ function POMDPs.update(up::MultiFilterUpdater, belief_old, action, observation)
         f -> weighted_centre_of_mass_in_range(f, up.max_range), all_filters
     )
 
-    return filter(f -> filter_variance_below_max(f, up.max_variance), all_filters)
+    return filter(f -> filter_variance_below_max(f, up.max_variance), visible_filters)
 end

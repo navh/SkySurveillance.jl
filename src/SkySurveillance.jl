@@ -14,11 +14,10 @@ using POMDPTools:
     Deterministic, HistoryRecorder, POMDPTools, RandomPolicy, RandomSolver, eachstep
 using POMDPs:
     POMDP, POMDPs, Policy, Solver, Updater, discount, isterminal, reward, simulate, solve
-using Plots:
-    Plots, RGB, Shape, distinguishable_colors, mp4, pdf, pgfplotsx, plot, plot!, savefig
+using Plots: Plots, RGB, Shape, distinguishable_colors, mp4, pgfplotsx, plot, plot!, savefig
 using Random: AbstractRNG, Xoshiro
 using StaticArrays: SVector
-using Statistics: mean, var
+using Statistics: mean, std, var
 using TOML: parse, parsefile
 
 export FlatPOMDP,
@@ -27,16 +26,19 @@ export FlatPOMDP,
     RandomSolver,
     SimpleGreedySolver,
     SequentialSolver,
-    HighestVarianceSolver
+    HighestVarianceSolver,
+    SingleSweepSolver
 
 include("Flat_POMDP/types.jl")
 include("Flat_POMDP/flat_pomdp.jl")
 include("Flat_POMDP/belief_pomdp.jl")
 include("Flat_POMDP/updater.jl")
 include("Flat_POMDP/solver_random.jl")
-include("Flat_POMDP/solver_sequential.jl")
+include("Flat_POMDP/solver_sequential.jl") # Used in solver_single_sweep
+include("Flat_POMDP/solver_single_sweep.jl") # Needs solver_sequential
 include("Flat_POMDP/solver_highest_variance.jl")
 include("Flat_POMDP/solver_simple_net.jl")
+# include("Flat_POMDP/solver_particle_tree.jl")
 include("Flat_POMDP/visualizations.jl")
 
 end

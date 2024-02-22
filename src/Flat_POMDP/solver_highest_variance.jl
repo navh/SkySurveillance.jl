@@ -46,7 +46,10 @@ function POMDPs.action(p::HighestVariancePolicy, b)
         if filter_variance(filter) > highest_variance
             highest_variance = filter_variance(filter)
 
+            # Yeah so even with very large (90degree) beams, it still loses the plot here. 
+            # I think I should dial up the variance on the filters.
             # Might be smarter to sample some random particle instead of doing mean theta
+            # This would hopefully allow it to wander around and explore the edges of very big clouds.
             θ = filter_mean_θ(filter)
         end
     end

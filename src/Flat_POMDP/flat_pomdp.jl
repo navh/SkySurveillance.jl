@@ -46,42 +46,42 @@ end
 
 ### states
 
-function initialize_random_targets(p::FlatPOMDP)::FlatState
-    xs = rand(
-        p.rng, Uniform(p.xy_min_meters * 0.8, p.xy_max_meters * 0.8), p.number_of_targets
-    )
-    ys = rand(
-        p.rng, Uniform(p.xy_min_meters * 0.8, p.xy_max_meters * 0.8), p.number_of_targets
-    )
-    x_velocities = rand(
+function initialize_random_target(p::FlatPOMDP, i::Integer)::Target
+    x = rand(p.rng, Uniform(p.xy_min_meters, p.xy_max_meters))
+    y = rand(p.rng, Uniform(p.xy_min_meters, p.xy_max_meters))
+
+    while √(x^2 + y^2) > p.radar_max_range_meters
+        x = rand(p.rng, Uniform(p.xy_min_meters, p.xy_max_meters))
+        y = rand(p.rng, Uniform(p.xy_min_meters, p.xy_max_meters))
+    end
+
+    ẋ = rand(
         p.rng,
         Uniform(
             -p.target_velocity_max_meters_per_second,
             p.target_velocity_max_meters_per_second,
         ),
-        p.number_of_targets,
     )
-    y_velocities = rand(
+    ẏ = rand(
         p.rng,
         Uniform(
             -p.target_velocity_max_meters_per_second,
             p.target_velocity_max_meters_per_second,
         ),
-        p.number_of_targets,
     )
-    random_times = rand(p.rng, p.target_reappearing_distribution, p.number_of_targets)
-    random_times[1] = 0 # at least one visible at first step
-    initial_targets = [
-        Target(i, random_times[i], xs[i], ys[i], x_velocities[i], y_velocities[i]) for
-        i in 1:(p.number_of_targets)
-    ]
-    return FlatState(initial_targets)
+    if i == 1 # Make first target visible at start
+        return Target(i, 0.0, x, y, ẋ, ẏ)
+    end
+    random_time = rand(p.rng, p.target_reappearing_distribution)
+    return Target(i, random_time, x, y, ẋ, ẏ)
 end
 
 function POMDPs.initialstate(pomdp::FlatPOMDP)
-    # Maybe needs to be some implicit distribution.
-    # Maybe just deterministic based on an RNG.
-    return Deterministic(initialize_random_targets(pomdp))
+    initial_targets = [
+        initialize_random_target(pomdp, i) for i in 1:(pomdp.number_of_targets)
+    ]
+    initial_state = FlatState(initial_targets)
+    return Deterministic(initial_state)
 end
 
 ### actions 
@@ -97,7 +97,7 @@ function action_to_rad(action::FlatAction)
 end
 
 function target_visible(target::Target)
-    return target.appears_at_t >= 0
+    return target.appears_at_t >= 0.0
 end
 
 function target_in_range(target::Target, max_range::Number)
@@ -106,28 +106,30 @@ end
 
 function target_in_beam(target::Target, action::FlatAction, beamwidth::Number)
     target_θ = atan(target.y, target.x)
-    # TODO: check this around -pi to pi transition
-    return abs((target_θ - action_to_rad(action))) < beamwidth / 2 # TODO: tried to fix the 180 prob, unsure about new issues around 0-1 transition?
+
+    # Handle beam crossing the π to -π line.
+    if target_θ < 0
+        target_θ = target_θ + 2π
+    end
+    if action_to_rad(action) < 0
+        target_θ = target_θ - 2π
+    end
+    return abs(target_θ - action_to_rad(action)) < beamwidth / 2
 end
 
-function target_observation(target)
+function target_observation(target, rng)
     # Sensor is at origin so this is all quite simple
 
-    # TODO: gaussian noise goes here, depends on SNR?
-    # Add in some sort of dθ?
-    # dr = Normal(0, 1e-8) # range resolution
-    # dθ = Normal(0, 1e-8)
-    # dv = Normal(0, 1e-8) # doppler resolution
     dr = Normal(0, 5) # range resolution
-    dθ = Normal(0, 3 * π / 180)
+    dθ = Normal(0, 1 * 2π / 360) # should be 1/2 BW / SNR (talk to sunila about vkb)
     dv = Normal(0, 0.5) # doppler resolution
 
-    observed_r = √(target.x^2 + target.y^2) + rand(dr)
-    observed_θ = atan(target.y, target.x) + rand(dθ) # note the reversal
-    target_local_θ = atan(target.ẏ, target.ẋ) # note the reversal
+    observed_r = √(target.x^2 + target.y^2) + rand(rng, dr)
+    observed_θ = atan(target.y, target.x) + rand(rng, dθ)
+    target_local_θ = atan(target.ẏ, target.ẋ)
     target_local_v = √(target.ẋ^2 + target.ẏ^2)
     # TODO: add diagram to README showing how observed_v math works
-    observed_v = cos(target_local_θ - observed_θ) * target_local_v + rand(dv)
+    observed_v = cos(target_local_θ - observed_θ) * target_local_v + rand(rng, dv)
 
     return TargetObservation(target.id, observed_r, observed_θ, observed_v)
 end
@@ -138,14 +140,8 @@ function illumination_observation(pomdp::FlatPOMDP, action::FlatAction, state::F
     # SNR = POWER * t / (BW r**4)
     # work out the odds that the beam has hit the target
     # for now, hit = 1
-    # put this in target_spotted?
 
     # TODO: rare random detections
-    # - previously this was implemented by just generating a full matrix 0-1
-    # - then I added my very small "Odds of random detection"
-    # - then I np.floor'd it so that they almost all went to zero
-    # - then I used that as a mask on a random grid of velocities
-    # - can't recycle the random or they'll all be max velocity
 
     observed_targets = filter(
         target ->
@@ -155,7 +151,7 @@ function illumination_observation(pomdp::FlatPOMDP, action::FlatAction, state::F
         state.targets,
     )
 
-    return [target_observation(t) for t in observed_targets]
+    return [target_observation(t, pomdp.rng) for t in observed_targets]
 end
 
 function generate_o(
@@ -171,58 +167,53 @@ end
 
 # transitions 
 
-function update_target(target::Target, time)
-    return Target(
-        target.id,
-        target.appears_at_t + time,
-        target.x + target.ẋ * time,
-        target.y + target.ẏ * time,
-        target.ẋ,
-        target.ẏ,
-    )
+function update_target(target::Target, pomdp::FlatPOMDP)
+    if target_in_range(target, pomdp.radar_max_range_meters)
+        return Target(
+            target.id,
+            target.appears_at_t + pomdp.dwell_time_seconds,
+            target.x + target.ẋ * pomdp.dwell_time_seconds,
+            target.y + target.ẏ * pomdp.dwell_time_seconds,
+            target.ẋ,
+            target.ẏ,
+        )
+    end
+    return initialize_random_target(pomdp, target.id)
 end
 
 function generate_s(
     pomdp::FlatPOMDP, s::FlatState, a::FlatAction, rng::RNG
 ) where {RNG<:AbstractRNG}
     if isterminal(pomdp, s)
+        @error "No targets in frame, this should never happen"
         return s
     end
     new_targets = SVector{pomdp.number_of_targets,Target}([
-        update_target(target, pomdp.dwell_time_seconds) for target in s.targets
+        update_target(target, pomdp) for target in s.targets
     ])
     return FlatState(new_targets)
 end
 
 ### rewards 
 
-function POMDPs.reward(pomdp::FlatPOMDP, s::FlatState, a::FlatAction, sp::FlatState)
-    if isterminal(pomdp, s)
-        return 0
-    end
-
-    # sum of target reward?
-    # pomdp.sum_targets_observed
-    # I really still feel that this should be the reward distance reduction
-    # why have I done this to myself. why can't I just access b in here. 
-    return 0
-end
+# function POMDPs.reward(pomdp::FlatPOMDP, s::FlatState, a::FlatAction, sp::FlatState)
+#     if isterminal(pomdp, s)
+#         return 0
+#     end
+#
+#     # sum of target reward?
+#     # pomdp.sum_targets_observed
+#     # I really still feel that this should be the reward distance reduction
+#     # why have I done this to myself. why can't I just access b in here.
+#     return 0
+# end
 
 function POMDPs.reward(pomdp::FlatPOMDP, s::FlatState, b::MultiFilterBelief)
-    # if isterminal(pomdp, s)
-    #     return 0
-    # end
-    #
-    # visible_targets = filter(target -> target.appears_at_t >= 0, s.targets)
-    #
-    # tracked_targets = filter(
-    #     target -> target.id ∈ [filter.id for filter in b], visible_targets
-    # )
-    # untracked_targets = filter(
-    #     target -> target.id ∉ [filter.id for filter in b], visible_targets
-    # )
-    #
-    score = 0
+    if isterminal(pomdp, s)
+        return 0.0 # Should never happen? 
+    end
+
+    score = 0.0
 
     for target in s.targets
         if target.appears_at_t >= 0 &&
@@ -236,17 +227,32 @@ function POMDPs.reward(pomdp::FlatPOMDP, s::FlatState, b::MultiFilterBelief)
             end
         end
     end
-    return -score # NOTE: Negation of the score
+    return score / length(s.targets)
 end
 
 function score_tracked_target(target, filter)
+    ### Attempt number 1: this explodes
+    # 1e4 is experimentally roughly the worst a filter gets until it just flies off the handle
     # Basically RMS 
-    return sum([
-        √((target.x - particle.x)^2 + (target.y - particle.y)^2) for
-        particle in filter.particles
-    ]) / length(filter.particles)
+    # return 1 -
+    #        (
+    #     sum([
+    #         √((target.x - particle.x)^2 + (target.y - particle.y)^2) for
+    #         particle in filter.particles
+    #     ]) / length(filter.particles)
+    # ) / 8e4
+
+    μ_x = mean([particle.x for particle in filter.particles])
+    σ_x = std([particle.x for particle in filter.particles])
+
+    μ_y = mean([particle.y for particle in filter.particles])
+    σ_y = std([particle.y for particle in filter.particles])
+
+    # return min(1.0, 1e7 * pdf(Normal(μ_x, σ_x), target.x) * pdf(Normal(μ_y, σ_y), target.y))
+    return -((target.x - μ_x)^2 + σ_x^2 + (target.y - μ_y)^2 + σ_y^2)
 end
 
 function score_untracked_target(target)
-    return target.appears_at_t * 1e3
+    # return max(0.0, target.appears_at_t * 1e3)
+    return -5e8
 end

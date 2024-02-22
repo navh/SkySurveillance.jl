@@ -21,7 +21,7 @@ end
 FlatObservation = Vector{TargetObservation}
 
 FlatAction = Number
-# FlatAction = Float64 # Must be Float64 due to rand(uniform(f32,f32)) unwaveringly returning f64
+# FlatAction = Float64 # Must be Float64 due to rand(rng, uniform(f32,f32)) unwaveringly returning f64
 # I guess now could be a 'number'
 # Eventually I'd like Tuple{Float32,Float32,Float32} # azimuth, beamwidth, dwell_time
 

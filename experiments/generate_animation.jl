@@ -1,5 +1,4 @@
 include("experiment_utils.jl") # Sets up the BMDP
-using Plots: @animate, Plots, mp4
 
 # solver = SimpleGreedySolver(;
 #     pomdp=pomdp,
@@ -11,6 +10,7 @@ using Plots: @animate, Plots, mp4
 #     monte_carlo_rollouts=PARAMS["monte_carlo_rollouts"],
 # )
 # solver = SequentialSolver()
+# solver = SingleSweepSolver()
 solver = HighestVarianceSolver()
 
 policy = solve(solver, pomdp)

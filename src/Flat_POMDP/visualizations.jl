@@ -50,7 +50,7 @@ function POMDPTools.render(pomdp::FlatPOMDP, step::NamedTuple)
             (0.0, 0.0)
         ],
     )
-    plot!(plt, beam; fillcolor=:red, fillalpha=0.5)
+    plot!(plt, beam; fillcolor=:red, fillalpha=0.1)
 
     # Plot observations
     if !isempty(step.o)

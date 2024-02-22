@@ -50,7 +50,7 @@ function POMDPs.solve(solver::SimpleGreedySolver, pomdp::BeliefPOMDP)
                             o, pomdp.underlying_pomdp.number_of_targets
                         )
                         result = model(action_observation(a, summary))
-                        typeof(result)
+                        # typeof(result)
                         mse(result, r)
                     end
                     Flux.update!(opt_state, model, grads[1])
@@ -134,17 +134,19 @@ function action_observation(action, observation)
     return Vector{Float32}(vcat(action, observation))
 end
 
-function monte_carlo_twig_search(model, observation, action_space, n_rollouts, max_targets)
+function monte_carlo_twig_search(
+    model, observation, action_space, n_rollouts, max_targets, rng
+)
     #todo - just jam this all in the action space because unpacking the entire policy this way is silly 
     summary = observation_summary_vector(observation, max_targets)
-    best_action = rand(action_space)
+    best_action = rand(rng, action_space)
 
     if sum(summary) == 0.0
         return best_action
     end
 
     best_estimate = model(action_observation(best_action, summary))
-    for a in rand(action_space, n_rollouts)
+    for a in rand(rng, action_space, n_rollouts)
         estimate = model(action_observation(a, summary))
         if estimate > best_estimate
             best_estimate = estimate

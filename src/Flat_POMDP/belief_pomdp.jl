@@ -38,8 +38,8 @@ end
 function POMDPs.initialstate(pomdp::BeliefPOMDP)
     return Deterministic(
         UpdaterState(
-            initialize_random_targets(pomdp.underlying_pomdp),
-            0,
+            rand(pomdp.rng, POMDPs.initialstate(pomdp.underlying_pomdp)),
+            0.0,
             TargetObservation[],
             SingleFilter[],
         ),
@@ -65,32 +65,6 @@ function generate_o(
     # return belief_to_observation(pomdp, s.belief_state)
 end
 
-# TODO: delete this, it has been moved to teh solver simple net
-#
-# function filter_variance(filter::SingleFilter)
-#     return var([particle.x for particle in filter.particles]) + var([particle.y for particle in filter.particles])
-# end
-#
-# function filter_mean_θ(filter::SingleFilter)
-#     return mean([atan(particle.y, particle.x) for particle in filter.particles])
-# end
-#
-# function belief_summary_vector(pomdp::BeliefPOMDP, belief)
-#     θs_and_variances = sort([
-#         (filter_mean_θ(filter), filter_variance(filter)) for filter in belief
-#     ])
-#
-#     s = []
-#     for (θ, var) in θs_and_variances
-#         push!(s, θ)
-#         push!(s, var)
-#     end
-#     while length(s) < 2 * pomdp.underlying_pomdp.number_of_targets
-#         push!(s, 0.0)
-#     end
-#     return SVector{2 * pomdp.underlying_pomdp.number_of_targets,Float32}(s)
-# end
-#
 ### transitions
 
 function generate_s(
@@ -104,7 +78,35 @@ end
 
 ### rewards
 
+# function score_tracked_target(target, filter)
+#     # Basically RMS 
+#     return sum([
+#         √((target.x - particle.x)^2 + (target.y - particle.y)^2) for
+#         particle in filter.particles
+#     ]) / length(filter.particles)
+# end
+#
+# function score_untracked_target(target)
+#     return max(0, target.appears_at_t * 1e3)
+# end
+
 function POMDPs.reward(pomdp::BeliefPOMDP, s::UpdaterState, a)
+    # bp = POMDPs.update(pomdp.updater, s.belief_state, a)
+    # score = 0
+    #
+    # for target in s.underlying_state.targets
+    #     if target.appears_at_t >= 0 &&
+    #         √(target.x^2 + target.y^2) <= pomdp.underlying_pomdp.radar_max_range_meters
+    #         filter_index = findfirst(x -> x.id == target.id, s.belief_state)
+    #         # change to spread of the particle filter 
+    #         if filter_index === nothing
+    #             score += score_untracked_target(target)
+    #         else
+    #             score += score_tracked_target(target, s.belief_state[filter_index])
+    #         end
+    #     end
+    # end
+    #
     return POMDPs.reward(pomdp.underlying_pomdp, s.underlying_state, s.belief_state)
 end
 
