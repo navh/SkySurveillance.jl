@@ -117,19 +117,31 @@ function target_in_beam(target::Target, action::FlatAction, beamwidth::Number)
     return abs(target_θ - action_to_rad(action)) < beamwidth / 2
 end
 
+function measurement_noise_r(rng, r)
+    # range resolution
+    return r + rand(rng, Normal(0, 5)) * 10
+end
+
+function measurement_noise_θ(rng, θ)
+    # should be 1/2 BW / SNR (talk to sunila about vkb)
+    return θ + rand(rng, Normal(0, 0.1 * 2π / 360))
+end
+
+function measurement_noise_v(rng, v)
+    # doppler resolution 
+    return v + rand(rng, Normal(0, 0.5)) * 10
+end
+
 function target_observation(target, rng)
     # Sensor is at origin so this is all quite simple
 
-    dr = Normal(0, 5) # range resolution
-    dθ = Normal(0, 1 * 2π / 360) # should be 1/2 BW / SNR (talk to sunila about vkb)
-    dv = Normal(0, 0.5) # doppler resolution
+    observed_r = measurement_noise_r(rng, √(target.x^2 + target.y^2))
+    observed_θ = measurement_noise_θ(rng, atan(target.y, target.x))
 
-    observed_r = √(target.x^2 + target.y^2) + rand(rng, dr)
-    observed_θ = atan(target.y, target.x) + rand(rng, dθ)
+    # TODO: add diagram to README showing how observed_v math works
     target_local_θ = atan(target.ẏ, target.ẋ)
     target_local_v = √(target.ẋ^2 + target.ẏ^2)
-    # TODO: add diagram to README showing how observed_v math works
-    observed_v = cos(target_local_θ - observed_θ) * target_local_v + rand(rng, dv)
+    observed_v = measurement_noise_v(rng, cos(target_local_θ - observed_θ) * target_local_v)
 
     return TargetObservation(target.id, observed_r, observed_θ, observed_v)
 end
@@ -210,7 +222,7 @@ end
 
 function POMDPs.reward(pomdp::FlatPOMDP, s::FlatState, b::MultiFilterBelief)
     if isterminal(pomdp, s)
-        return 0.0 # Should never happen? 
+        return 0.0 # Should never happen?
     end
 
     score = 0.0
@@ -231,28 +243,26 @@ function POMDPs.reward(pomdp::FlatPOMDP, s::FlatState, b::MultiFilterBelief)
 end
 
 function score_tracked_target(target, filter)
-    ### Attempt number 1: this explodes
-    # 1e4 is experimentally roughly the worst a filter gets until it just flies off the handle
-    # Basically RMS 
-    # return 1 -
-    #        (
-    #     sum([
-    #         √((target.x - particle.x)^2 + (target.y - particle.y)^2) for
-    #         particle in filter.particles
-    #     ]) / length(filter.particles)
-    # ) / 8e4
-
-    μ_x = mean([particle.x for particle in filter.particles])
-    σ_x = std([particle.x for particle in filter.particles])
-
-    μ_y = mean([particle.y for particle in filter.particles])
-    σ_y = std([particle.y for particle in filter.particles])
-
     # return min(1.0, 1e7 * pdf(Normal(μ_x, σ_x), target.x) * pdf(Normal(μ_y, σ_y), target.y))
-    return -((target.x - μ_x)^2 + σ_x^2 + (target.y - μ_y)^2 + σ_y^2)
+
+    # return 1 -
+    #        mean([sqrt((target.x - p.x)^2 + (target.y - p.y)^2) for p in filter.particles]) / 2000
+
+    x_particles = [particle.x for particle in filter.particles]
+    y_particles = [particle.y for particle in filter.particles]
+    return max(
+        0,
+        1 -
+        (
+            (target.x - mean(x_particles))^2 +
+            var(x_particles) +
+            (target.y - mean(y_particles))^2 +
+            var(y_particles)
+        ) / 1e7,
+    )
 end
 
 function score_untracked_target(target)
-    # return max(0.0, target.appears_at_t * 1e3)
-    return -5e8
+    return 0.0
+    # return -5e8
 end

@@ -13,6 +13,14 @@
     monte_carlo_rollouts::Int
 end
 
+# function DenseRegularizedLayer(in_out::Pair, activation)
+#     input, output = in_out
+#     # if use_batchnorm && !use_dropout
+#     # end
+#     return [Dense(input => output, activation)]
+#     # end
+# end
+
 function POMDPs.solve(solver::SimpleGreedySolver, pomdp::BeliefPOMDP)
     action_width = 1 # TODO: should be length(action) or based on types.jl somehow
     belief_width = 2 * pomdp.underlying_pomdp.number_of_targets
@@ -98,55 +106,45 @@ function POMDPs.solve(solver::SimpleGreedySolver, pomdp::BeliefPOMDP)
     )
 end
 
+function filter_mean_θ(filter::SingleFilter)
+    return mean([atan(particle.y, particle.x) for particle in filter.particles])
+end
+
 function observation_summary_vector(belief, number_of_targets)
     # The actual answer is https://arxiv.org/abs/1910.06764 , but padding will have to do for now
 
     θs_and_variances = sort([
         (filter_mean_θ(filter), filter_variance(filter)) for filter in belief
-    ]) # wait, is sorting even helping? feels like it should but it doesn't seem to care
+    ])
     # θs_and_variances = (
     #     (filter_mean_θ(filter), filter_variance(filter)) for filter in belief
     # )
-
-    # s = zeros(Float32, 2 * number_of_targets)  
-    s = []
-    θs_and_variances = (
-        (filter_mean_θ(filter), filter_variance(filter)) for filter in belief
+    s = vcat(
+        [θ for (θ, var) in θs_and_variances],
+        zeros(Float32, number_of_targets - length(θs_and_variances)),
+        [var for (θ, var) in θs_and_variances],
+        zeros(Float32, number_of_targets - length(θs_and_variances)),
     )
-
-    # This push! nonsense was cooperating, but now Zygote hates it
-    # I need to use some zygote.buffer() nonsense, but I'm just going to abandon this for now
-    # I think a better use of time is the transformers paper above, or some similar 'more direct' variant.
-    for (θ, var) in θs_and_variances
-        push!(s, θ)
-        push!(s, var)
-    end
-    # Add on padding 
-    while length(s) < 2 * number_of_targets
-        push!(s, 0.0)
-    end
     return s
-    # return SVector{length(s),Float32}(s)
 end
 
 function action_observation(action, observation)
-    #return SVector{length(action) + length(observation),Float32}(vcat(action, observation))
+    # return SVector{length(action) + length(observation),Float32}(vcat(action, observation))
     return Vector{Float32}(vcat(action, observation))
 end
 
-function monte_carlo_twig_search(
-    model, observation, action_space, n_rollouts, max_targets, rng
-)
+function monte_carlo_twig_search(model, observation, action_space, n_rollouts, max_targets)
     #todo - just jam this all in the action space because unpacking the entire policy this way is silly 
+
     summary = observation_summary_vector(observation, max_targets)
-    best_action = rand(rng, action_space)
+    best_action = rand(model.underlying_pomdp.rng, action_space)
 
     if sum(summary) == 0.0
         return best_action
     end
 
     best_estimate = model(action_observation(best_action, summary))
-    for a in rand(rng, action_space, n_rollouts)
+    for a in rand(model.underlying_pomdp.rng, action_space, n_rollouts)
         estimate = model(action_observation(a, summary))
         if estimate > best_estimate
             best_estimate = estimate

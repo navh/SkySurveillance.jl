@@ -49,9 +49,11 @@ function generate_all_figures()
     pomdp = BeliefPOMDP(child_pomdp.rng, child_pomdp, u)
 
     # solver_single_sweep = SingleSweepSolver()
-    solver_single_sweep = SequentialSolver()
+    # solver_single_sweep = SequentialSolver()
+    solver_single_sweep = HighestVarianceSolver()
+
     policy_single_sweep = solve(solver_single_sweep, pomdp)
-    hr = HistoryRecorder(; max_steps=400)
+    hr = HistoryRecorder(; max_steps=1000)
     four_sweeps = [simulate(hr, pomdp, policy_single_sweep) for _ in 1:4]
     plt = plot(;
         xlabel="Step",

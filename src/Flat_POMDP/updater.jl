@@ -1,6 +1,6 @@
 function propagate_particle(rng::AbstractRNG, p::WeightedParticle, time::Number)
-    ẍ = rand(rng, Normal(0.0, √(80^2)))
-    ÿ = rand(rng, Normal(0.0, √(80^2)))
+    ẍ = rand(rng, Normal(0.0, √(40^2)))
+    ÿ = rand(rng, Normal(0.0, √(40^2)))
     return WeightedParticle(
         p.x + p.ẋ * time + ẍ / 2 * time^2,
         p.y + p.ẏ * time + ÿ / 2 * time^2,
@@ -13,11 +13,9 @@ end
 function filter_variance(filter::SingleFilter)
     #TODO: should this be std?
     #TODO: should this be /2?
-    return var([particle.x for particle in filter.particles]) + var([particle.y for particle in filter.particles])
-end
-
-function filter_mean_θ(filter::SingleFilter)
-    return mean([atan(particle.y, particle.x) for particle in filter.particles])
+    return (
+        var([particle.x for particle in filter.particles]) + var([particle.y for particle in filter.particles])
+    ) / 2
 end
 
 function filter_variance_below_max(filter::SingleFilter, max_variance)
@@ -32,7 +30,7 @@ function propagate_filter(rng::AbstractRNG, filter::SingleFilter, time::Number)
 end
 
 function reweight_particle(particle::WeightedParticle, obs_x, obs_y)
-    weight = 1 / (1 + √((particle.x - obs_x)^2 + (particle.y - obs_y)^2)) # just rms of distance? 
+    weight = 1 / √((particle.x - obs_x)^2 + (particle.y - obs_y)^2) # just rms of distance? 
     return WeightedParticle(particle.x, particle.y, particle.ẋ, particle.ẏ, weight)
 end
 
@@ -43,13 +41,13 @@ function reweight_filter(filter::SingleFilter, obs)
 end
 
 function initialize_filter(rng::AbstractRNG, obs, n_particles::Int)
-    x = obs.r * cos(obs.θ)
-    y = obs.r * sin(obs.θ)
-    ẋ = obs.v * cos(obs.θ)
-    ẏ = obs.v * sin(obs.θ)
-    d = Normal(0.0, 25.0) # TODO: paramaterize at least σ? Ask ravi for a good theta? different d for r and v? Really comes from bandwidth, 3mhz, c/2b? +/- 25m. 1ghz radar, that would be 0.3% bandwidth.
-    ḋ = Normal(0.0, 6.0) # Some percent of range, really comes from PRF. Let's say PRF of 2khz, 100samples, v/λ, if λ is 50cm, so 6m/s.
-    x_max_tangential_velocity = abs(700 * sin(obs.θ))
+    # x = obs.r * cos(obs.θ)
+    # y = obs.r * sin(obs.θ)
+    # ẋ = obs.v * cos(obs.θ)
+    # ẏ = obs.v * sin(obs.θ)
+    # d = Normal(0.0, 25.0) # TODO: paramaterize at least σ? Ask ravi for a good theta? different d for r and v? Really comes from bandwidth, 3mhz, c/2b? +/- 25m. 1ghz radar, that would be 0.3% bandwidth.
+    # ḋ = Normal(0.0, 6.0) # Some percent of range, really comes from PRF. Let's say PRF of 2khz, 100samples, v/λ, if λ is 50cm, so 6m/s.
+    x_max_tangential_velocity = abs(700 * sin(obs.θ)) # 700 should be set to the max velocity param from the underlying pomdp
     y_max_tangential_velocity = abs(700 * cos(obs.θ))
     x_undertainty_in_tangential_velocity = Uniform(
         -x_max_tangential_velocity, x_max_tangential_velocity
@@ -59,10 +57,12 @@ function initialize_filter(rng::AbstractRNG, obs, n_particles::Int)
     )
     particles = [
         WeightedParticle(
-            x + rand(rng, d),
-            y + rand(rng, d),
-            ẋ + rand(rng, ḋ) + rand(rng, x_undertainty_in_tangential_velocity),
-            ẏ + rand(rng, ḋ) + rand(rng, y_undertainty_in_tangential_velocity),
+            cos(measurement_noise_θ(rng, obs.θ)) * measurement_noise_r(rng, obs.r),
+            sin(measurement_noise_θ(rng, obs.θ)) * measurement_noise_r(rng, obs.r),
+            cos(measurement_noise_θ(rng, obs.θ)) * measurement_noise_r(rng, obs.v) +
+            rand(rng, x_undertainty_in_tangential_velocity),
+            sin(measurement_noise_θ(rng, obs.θ)) * measurement_noise_r(rng, obs.v) +
+            rand(rng, y_undertainty_in_tangential_velocity),
             1.0,
         ) for _ in 1:n_particles
     ]
@@ -139,9 +139,11 @@ function POMDPs.update(up::MultiFilterUpdater, belief_old, action, observation)
 
     # Resampling - a new collection of state particles is generated with particle. frequencies proportional to the new weights
     resampled_filters = [low_variance_resampler(up.rng, f) for f in reweighted_filters] # O(n) resampler, page 110 of Probabilistic Robotics by Thurn, Burgard, and Fox.
+    # resampled_filters = []
 
     # 2.3) - Filterless observations, initialize a new filter
     new_observations = filter(o -> o.id ∉ [f.id for f in propagated_belief], observation)
+    # new_observations = observation
 
     new_filters = [
         initialize_filter(up.rng, o, up.n_particles_per_filter) for o in new_observations

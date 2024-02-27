@@ -24,12 +24,3 @@ anim = @animate for step in eachstep(history)
 end
 @info "writing animation"
 mp4(anim, dir_paths.animation_dir * "a.mp4"; loop=1)
-
-@info "sorting rewards"
-rewards = [reward(pomdp, step.s, step.b) for step in eachstep(history)]
-@info "writing rewards"
-open(dir_paths.log_dir * "rewards.txt", "w") do f
-    for i in rewards
-        println(f, i)
-    end
-end

@@ -87,10 +87,10 @@ end
 function simulate(planner, tree, depth)
     if depth = 0
     end
-    for i in 1:depth
-        widen_actions!()
-        # widen_beliefs!()
-    end
+    # for i in 1:depth
+    #     widen_actions!()
+    #     widen_beliefs!()
+    # end
 end
 
 function select_best(tree::PUCTTree)
