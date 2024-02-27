@@ -1,12 +1,7 @@
+.DS_Store
 *.jl.*.cov
 *.jl.cov
 *.jl.mem
-*.jld2
-*.mov
-*.mp4
-.DS_Store
-/Manifest.toml
 LocalPreferences.toml
-/logs*
-/pdfs*
+/Manifest.toml
 /out*
