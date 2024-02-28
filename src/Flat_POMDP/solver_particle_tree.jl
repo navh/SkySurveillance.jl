@@ -114,7 +114,7 @@ function insert_belief_node!(tree::PUCTTree, b::MultiFilterBelief)
     return bnode
 end
 
-function insert_action_node!(tree::PUCTTree, bnode::Int, a::A, q0::Float64) where {S,A}
+function insert_action_node!(tree::PUCTTree, bnode::Int, a::A, q0::Float64)
     push!(tree.a_labels, a)
     push!(tree.q, q0)
     banode = length(tree.a_labels)
@@ -126,6 +126,7 @@ end
 
 function input_representation(belief)
     #TODO: turn the belief into something of constant size
+    return observation_summary_vector(belief, 20)
 end
 
 """

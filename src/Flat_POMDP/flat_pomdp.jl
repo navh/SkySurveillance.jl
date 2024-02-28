@@ -34,7 +34,8 @@ function POMDPs.gen(
 ) where {RNG<:AbstractRNG}
     sp = generate_s(pomdp, s, a, rng)
     o = generate_o(pomdp, s, a, sp, rng)
-    r = reward(pomdp, s, a, sp)
+    # r = reward(pomdp, s, a)
+    r = 0.0
     return (sp=sp, o=o, r=r)
 end
 
@@ -87,7 +88,8 @@ end
 ### actions 
 
 function POMDPs.actions(pomdp::FlatPOMDP)
-    return Uniform{Float32}(0, 1)
+    # return Uniform{Float32}(0, 1)
+    return collect(range(0, 1; length=40)) #TODO: set length to something like 2xbw
 end
 
 # observations 
@@ -197,12 +199,13 @@ function generate_s(
     pomdp::FlatPOMDP, s::FlatState, a::FlatAction, rng::RNG
 ) where {RNG<:AbstractRNG}
     if isterminal(pomdp, s)
-        @error "No targets in frame, this should never happen"
+        # @error "No targets in frame, this should never happen"
         return s
     end
-    new_targets = SVector{pomdp.number_of_targets,Target}([
-        update_target(target, pomdp) for target in s.targets
-    ])
+    # new_targets = SVector{pomdp.number_of_targets,Target}([
+    #     update_target(target, pomdp) for target in s.targets
+    # ])
+    new_targets = [update_target(target, pomdp) for target in s.targets]
     return FlatState(new_targets)
 end
 
@@ -219,6 +222,16 @@ end
 #     # why have I done this to myself. why can't I just access b in here.
 #     return 0
 # end
+
+function POMDPs.reward(
+    pomdp::FlatPOMDP,
+    s::FlatState,
+    b::MultiFilterBelief,
+    sp::FlatState,
+    bp::MultiFilterBelief,
+)
+    return POMDPs.reward(pomdp, sp, bp) - POMDPs.reward(pomdp, s, b)
+end
 
 function POMDPs.reward(pomdp::FlatPOMDP, s::FlatState, b::MultiFilterBelief)
     if isterminal(pomdp, s)

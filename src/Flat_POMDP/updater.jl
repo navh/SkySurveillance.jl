@@ -102,6 +102,7 @@ function low_variance_resampler(rng::RNG, filter::SingleFilter) where {RNG<:Abst
     return SingleFilter(filter.id, ps)
 end
 
+# TODO: these belief updater params are stored in the underlying pomdp in a really awkward way
 @kwdef struct MultiFilterUpdater <: POMDPs.Updater
     rng::AbstractRNG
     dwell_time_seconds::Number
@@ -156,5 +157,5 @@ function POMDPs.update(up::MultiFilterUpdater, belief_old, action, observation)
         f -> weighted_centre_of_mass_in_range(f, up.max_range), all_filters
     )
 
-    return filter(f -> filter_variance_below_max(f, up.max_variance), visible_filters)
+    return filter(f -> filter_variance_below_max(f, up.max_variance), visible_filters) # I think this list of filters is a "MultiFilterBelief"
 end

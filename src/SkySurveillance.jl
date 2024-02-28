@@ -27,7 +27,10 @@ export FlatPOMDP,
     SimpleGreedySolver,
     SequentialSolver,
     HighestVarianceSolver,
-    SingleSweepSolver
+    SingleSweepSolver,
+    Target,
+    FlatState,
+    SingleFilter #just for betazero experiment 
 
 include("Flat_POMDP/types.jl")
 include("Flat_POMDP/flat_pomdp.jl")
@@ -39,6 +42,7 @@ include("Flat_POMDP/solver_single_sweep.jl") # Needs solver_sequential
 include("Flat_POMDP/solver_highest_variance.jl")
 include("Flat_POMDP/solver_simple_net.jl")
 # include("Flat_POMDP/solver_particle_tree.jl")
+# include("Flat_POMDP/solver_raw_network.jl")
 include("Flat_POMDP/visualizations.jl")
 
 end
