@@ -90,8 +90,7 @@ function POMDPs.isterminal(
 )
     return false
 end
-# up = BootstrapFilter(pomdp, 500)
-#
+
 MAX_INPUT_TARGETS = 20 # note: gets doubled, must be >= max particles
 
 function filter_mean_θ(filter::SingleFilter)
@@ -112,7 +111,6 @@ function BetaZero.input_representation(belief::Array{SingleFilter})
     # θs_and_variances = (
     #     (filter_mean_θ(filter), filter_variance(filter)) for filter in belief
     # )
-    #
     return Vector{Float32}(
         vcat(
             [θ for (θ, var) in θs_and_variances],
@@ -149,13 +147,6 @@ function POMDPs.gen(bmdp::BeliefMDP, b::Vector{SingleFilter}, a, rng::AbstractRN
     return (sp=bp, r=r)
 end
 
-# function rand(rng::AbstractRNG, b::Vector{SingleFilter})
-#     if isempty(b)
-#         return Target(1, 1.0, 42.0, 42.0, 42.0, 42.0)
-#     end
-#     return [random_target_from_filter(rng, filter) for filter in b]
-# end
-
 function BetaZero.accuracy(pomdp::FlatPOMDP, b0, s0, states, actions, returns)
     # Function to determine accuracy of agent's final decision.
     return POMDPs.reward(pomdp, s0, b0)
@@ -164,7 +155,7 @@ end
 solver = BetaZeroSolver(;
     pomdp=pomdp,
     updater=up,
-    params=BetaZeroParameters(; n_iterations=50, n_data_gen=50),
+    params=BetaZeroParameters(; n_iterations=100, n_data_gen=250),
     nn_params=BetaZeroNetworkParameters(
         pomdp,
         up;
@@ -182,7 +173,7 @@ solver = BetaZeroSolver(;
     ),
     verbose=true,
     collect_metrics=true,
-    plot_incremental_data_gen=true,
+    plot_incremental_data_gen=false,
     mcts_solver=PUCTSolver(;
         n_iterations=100,
         k_action=2.0,
