@@ -12,6 +12,10 @@ function POMDPs.updater(::SingleSweepPolicy)
     return LastActionUpdater()
 end
 
+function POMDPs.action(p::SingleSweepPolicy, b::Vector{SingleFilter})
+    # Initial action 
+    return 0.0
+end
 function POMDPs.action(p::SingleSweepPolicy, b)
     new_action = (b + p.increment_step)
     return min(1.0, new_action)

@@ -6,7 +6,7 @@ end
 
 struct HighestVariancePolicy <: Policy
     rng::AbstractRNG
-    action_space::Sampleable
+    action_space::Any
     random_action_ratio::Number
 end
 
@@ -33,6 +33,10 @@ function POMDPs.action(p::HighestVariancePolicy, initial::Deterministic{UpdaterS
     #     ),
     # )
     return 0.0
+end
+
+function POMDPs.action(p::HighestVariancePolicy, b::Deterministic)
+    return rand(p.rng, p.action_space)
 end
 
 function POMDPs.action(p::HighestVariancePolicy, b)

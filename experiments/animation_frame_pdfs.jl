@@ -1,13 +1,16 @@
-include("experiment_utils.jl")
+include("experiment_utils.jl") # Sets up the BMDP
 
-#solver = RandomMultiFilter()
-solver = RandomSolver()
-#solver = SimpleGreedySolver()
-policy = solve(solver, pomdp)
+solver = SequentialSolver()
+# solver = SingleSweepSolver()
+# solver = HighestVarianceSolver()
+
+policy = solve(solver, bpomdp)
 
 hr = HistoryRecorder(; max_steps=PARAMS["animation_steps"])
-history = simulate(hr, pomdp, policy)
+history = simulate(hr, bpomdp, policy)
 
+@info "beginning rendering"
 for step in eachstep(history)
-    pdf(POMDPTools.render(pomdp, step), dir_paths.figure_dir * "frame-$(step.t).pdf")
+    pdf(POMDPTools.render(bpomdp, step), dir_paths.figure_dir * "frame-$(step.t).pdf")
 end
+@info dir_paths.figure_dir

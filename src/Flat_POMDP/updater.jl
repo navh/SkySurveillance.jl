@@ -45,8 +45,6 @@ function initialize_filter(rng::AbstractRNG, obs, n_particles::Int)
     # y = obs.r * sin(obs.θ)
     # ẋ = obs.v * cos(obs.θ)
     # ẏ = obs.v * sin(obs.θ)
-    # d = Normal(0.0, 25.0) # TODO: paramaterize at least σ? Ask ravi for a good theta? different d for r and v? Really comes from bandwidth, 3mhz, c/2b? +/- 25m. 1ghz radar, that would be 0.3% bandwidth.
-    # ḋ = Normal(0.0, 6.0) # Some percent of range, really comes from PRF. Let's say PRF of 2khz, 100samples, v/λ, if λ is 50cm, so 6m/s.
     x_max_tangential_velocity = abs(700 * sin(obs.θ)) # 700 should be set to the max velocity param from the underlying pomdp
     y_max_tangential_velocity = abs(700 * cos(obs.θ))
     x_undertainty_in_tangential_velocity = Uniform(

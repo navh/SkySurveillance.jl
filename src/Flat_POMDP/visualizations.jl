@@ -7,7 +7,8 @@ function POMDPTools.render(pomdp::FlatPOMDP, step::NamedTuple)
     plt = plot(;
         axis=nothing,
         showaxis=false,
-        size=(1920, 1080),
+        # size=(1920, 1080),
+        size=(600, 600), # Only square resolution known to work with FFMPG
         xlims=(-pomdp.xy_max_meters, pomdp.xy_max_meters),
         ylims=(-pomdp.xy_max_meters, pomdp.xy_max_meters),
     )
@@ -27,19 +28,6 @@ function POMDPTools.render(pomdp::FlatPOMDP, step::NamedTuple)
         )
     end
 
-    # Draw visible circle
-    plot!(
-        plt,
-        circleShape(0, 0, pomdp.radar_max_range_meters);
-        seriestype=[:shape],
-        lw=0.5,
-        color=:black,
-        linecolor=:black,
-        legend=false,
-        fillalpha=0.0,
-        aspect_ratio=1,
-    )
-
     # Draw action beam
     left = action_to_rad(step.a) - pomdp.beamwidth_rad / 2
     right = action_to_rad(step.a) + pomdp.beamwidth_rad / 2
@@ -50,7 +38,44 @@ function POMDPTools.render(pomdp::FlatPOMDP, step::NamedTuple)
             (0.0, 0.0)
         ],
     )
-    plot!(plt, beam; fillcolor=:red, fillalpha=0.1)
+    # plot!(plt, beam; fillcolor=:red, linecolor=:white, fillalpha=0.1)
+    plot!(plt, beam; fillcolor=:red, linealpha=0.0, fillalpha=0.1)
+
+    # Draw -24db side lobes
+    left24db = action_to_rad(step.a) - pomdp.beamwidth_rad / 2 * 3
+    right24db = action_to_rad(step.a) + pomdp.beamwidth_rad / 2 * 3
+    beam = Shape(
+        [
+            (0.0, 0.0)
+            Plots.partialcircle(left24db, right24db, 100, pomdp.radar_max_range_meters)
+            (0.0, 0.0)
+        ],
+    )
+    plot!(plt, beam; fillcolor=:red, linealpha=0.0, fillalpha=0.1)
+
+    # Draw visible circle
+    plot!(
+        plt,
+        circleShape(0, 0, pomdp.radar_min_range_meters);
+        seriestype=[:shape],
+        lw=1,
+        color=:black,
+        linecolor=:black,
+        legend=false,
+        fillalpha=0.0,
+        aspect_ratio=1,
+    )
+    plot!(
+        plt,
+        circleShape(0, 0, pomdp.radar_max_range_meters);
+        seriestype=[:shape],
+        lw=1,
+        color=:black,
+        linecolor=:black,
+        legend=false,
+        fillalpha=0.0,
+        aspect_ratio=1,
+    )
 
     # Plot observations
     if !isempty(step.o)

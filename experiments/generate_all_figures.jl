@@ -7,6 +7,7 @@ using POMDPs: mean, reward, simulate, solve
 using Plots: @animate, Plots, mp4, pdf, plot, plot!, savefig;
 using Random: Xoshiro
 using TOML
+using BetaZero
 
 function generate_all_figures()
     run_time = format(now(), "YYYYmmdd-HHMMSS-sss")
@@ -29,15 +30,15 @@ function generate_all_figures()
         rng=rng,
         discount=0.95,
         number_of_targets=1,
-        beamwidth_rad=360 / 20 * π / 180,
-        radar_min_range_meters=500,
-        radar_max_range_meters=500_000,
-        n_particles=200,
-        xy_min_meters=-1 * 500_000,
-        xy_max_meters=500_000,
-        dwell_time_seconds=200e-3,
+        beamwidth_rad=360 / 30 * π / 180,
+        radar_min_range_meters=20_000,
+        radar_max_range_meters=200_000,
+        n_particles=100,
+        xy_min_meters=-1 * 200_000,
+        xy_max_meters=200_000,
+        dwell_time_seconds=100e-3,
         target_velocity_max_meters_per_second=700,
-        target_reappearing_distribution=Uniform(-1e-10, 0),
+        target_reappearing_distribution=Uniform(-0, 1),
     )
     u = MultiFilterUpdater(
         child_pomdp.rng,
@@ -49,23 +50,23 @@ function generate_all_figures()
     pomdp = BeliefPOMDP(child_pomdp.rng, child_pomdp, u)
 
     # solver_single_sweep = SingleSweepSolver()
-    # solver_single_sweep = SequentialSolver()
-    solver_single_sweep = HighestVarianceSolver()
+    solver_single_sweep = SequentialSolver()
 
     policy_single_sweep = solve(solver_single_sweep, pomdp)
-    hr = HistoryRecorder(; max_steps=1000)
-    four_sweeps = [simulate(hr, pomdp, policy_single_sweep) for _ in 1:4]
+    hr = HistoryRecorder(; max_steps=1001)
+    four_sweeps = [simulate(hr, pomdp, policy_single_sweep) for _ in 1:1]
     plt = plot(;
         xlabel="Step",
         ylabel="Belief-Reward",
         # There's 72 points in an inch
         # In theory an ieee col is 3.5 inches wide
-        # size=(3.5 * 72, 2.5 * 72),
-        size=(7 * 72, 5 * 72),
-        titlefont=("STIXTwoText"),
-        legendfont=("STIXTwoText"),
-        tickfont=("STIXTwoText"),
-        guidefont=("STIXTwoText"),
+        size=(3.5 * 72, 2.5 * 72),
+        # size=(7 * 72, 5 * 72),
+        # titlefont=("STIXTwoText"),
+        titlefont=("times"),
+        legendfont=("times"),
+        tickfont=("times"),
+        guidefont=("times"),
         titlefontsize=6,
         legendfontsize=6,
         tickfontsize=6,
@@ -73,9 +74,18 @@ function generate_all_figures()
     )
     for history in four_sweeps
         rewards = [step.r for step in history]
-        plot!(plt, rewards; label="")
+        accuracy = []
+        igain = []
+        for i in 1:(length(rewards) - 1)
+            push!(accuracy, rewards[i + 1])
+            push!(igain, rewards[i + 1] - rewards[i])
+        end
+        plot!(plt, accuracy; label="Accuracy")
+        # plot!(plt, igain; label="Information Gain")
+        # plot!(plt, igain; label="Information Gain", legend=:inside)
+        plot!(plt, igain; label="Information Gain", legend=:right)
     end
-    fig_path = dir_paths.figure_dir * "four_single_detections.pdf"
+    fig_path = dir_paths.figure_dir * "single_hit.pdf"
     @info fig_path
     savefig(plt, fig_path)
 

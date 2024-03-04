@@ -4,7 +4,7 @@ include("experiment_utils.jl")
 solver_random = SequentialSolver()
 solver_sequential = SequentialSolver()
 solver_highest_variance = HighestVarianceSolver()
-solver_single_sweep = SingleSweepSolver()
+# solver_single_sweep = SingleSweepSolver()
 
 # learned_solver = SimpleGreedySolver(;
 #     pomdp=pomdp,
@@ -17,10 +17,10 @@ solver_single_sweep = SingleSweepSolver()
 # )
 
 @info "Define policies"
-policy_random = solve(solver_random, pomdp)
-policy_sequential = solve(solver_sequential, pomdp)
-policy_highest_variance = solve(solver_highest_variance, pomdp)
-policy_single_sweep = solve(solver_single_sweep, pomdp)
+policy_random = solve(solver_random, bpomdp)
+policy_sequential = solve(solver_sequential, bpomdp)
+policy_highest_variance = solve(solver_highest_variance, bpomdp)
+# policy_single_sweep = solve(solver_single_sweep, pomdp)
 
 hr = HistoryRecorder(; max_steps=PARAMS["animation_steps"])
 
@@ -29,56 +29,50 @@ function plot_everything()
     all_random = []
     all_sequential = []
     all_highest_variance = []
-    all_single_sweep = []
-    for _ in 1:10
-        history_random = simulate(hr, pomdp, policy_random)
-        history_sequential = simulate(hr, pomdp, policy_sequential)
-        history_highest_variance = simulate(hr, pomdp, policy_highest_variance)
-        history_single_sweep = simulate(hr, pomdp, policy_single_sweep)
+    all_highest_varianc = []
+    for _ in 1:1000
+        history_random = simulate(hr, bpomdp, policy_random)
+        history_sequential = simulate(hr, bpomdp, policy_sequential)
+        history_highest_variance = simulate(hr, bpomdp, policy_highest_variance)
+        # history_single_sweep = simulate(hr, pomdp, policy_single_sweep)
         push!(
-            all_random, [reward(pomdp, step.s, step.b) for step in eachstep(history_random)]
+            all_random,
+            [reward(bpomdp, step.s, step.b) for step in eachstep(history_random)],
         )
         push!(
             all_sequential,
-            [reward(pomdp, step.s, step.b) for step in eachstep(history_sequential)],
+            [reward(bpomdp, step.s, step.b) for step in eachstep(history_sequential)],
         )
         push!(
             all_highest_variance,
-            [reward(pomdp, step.s, step.b) for step in eachstep(history_highest_variance)],
-        )
-        push!(
-            all_single_sweep,
-            [reward(pomdp, step.s, step.b) for step in eachstep(history_single_sweep)],
+            [reward(bpomdp, step.s, step.b) for step in eachstep(history_highest_variance)],
         )
     end
     plt = plot(;
         xlabel="Step",
         ylabel="Belief-Reward",
-        size=(500, 350),
-        titlefont=("STIXTwoText"),
-        legendfont=("STIXTwoText"),
-        tickfont=("STIXTwoText"),
-        guidefont=("STIXTwoText"),
+        size=(3.5 * 72, 2.5 * 72),
+        # titlefont=("STIXTwoText"),
+        fontfamily=("Times Roman"),
+        # titlefont=("newtx"),
+        # legendfont=("newtx"),
+        # tickfont=("newtx"),
+        # guidefont=("newtx"),
     )
-    for reward in all_single_sweep
-        plt = plot!(plt, reward; label="", alpha=1)
-    end
 
+    # for reward in all_random
+    #     plt = plot!(plt, reward; label="", color=:black, alpha=0.1)
+    # end
     # for reward in all_sequential
-    #     plt = plot!(plt, reward; label="", alpha=1)
+    #     plt = plot!(plt, reward; label="", color=:blue, alpha=0.1)
     # end
     # for reward in all_highest_variance
     #     plt = plot!(plt, reward; label="", color=:green, alpha=0.1)
     # end
-    # for reward in all_random
-    #     plt = plot!(plt, reward; label="", color=:red, alpha=0.1)
-    # end
 
-    # plt = plot!(plt, mean(all_sequential); label="Mean Sequential Policy", color=:blue)
-    # plt = plot!(
-    #     plt, mean(all_highest_variance); label="Mean Highest Variance Policy", color=:green
-    # )
-    # plt = plot!(plt, mean(all_random); label="Mean Learned Policy", color=:red)
+    plt = plot!(plt, mean(all_random); label="Random", color=:black, linestyle=":")
+    plt = plot!(plt, mean(all_sequential); label="Sequential", color=:blue, linestyle="-")
+    plt = plot!(plt, mean(all_highest_variance); label="ϵ-Greedy", color=:green)
 
     @info "Writing figure"
     fig_path = dir_paths.figure_dir * "comparison.pdf"

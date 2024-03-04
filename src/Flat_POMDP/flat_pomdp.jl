@@ -102,39 +102,66 @@ function target_visible(target::Target)
     return target.appears_at_t >= 0.0
 end
 
-function target_in_range(target::Target, max_range::Number)
-    return √(target.x^2 + target.y^2) < max_range
+function target_in_visible_range(target::Target, min_range::Number, max_range::Number)
+    return min_range <= √(target.x^2 + target.y^2) <= max_range
 end
 
-function target_in_beam(target::Target, action::FlatAction, beamwidth::Number)
-    target_θ = atan(target.y, target.x)
+# function target_in_beam(target::Target, action::FlatAction, beamwidth::Number)
+#     target_θ = atan(target.y, target.x)
+#
+#     # Handle beam crossing the π to -π line.
+#     if target_θ < 0
+#         target_θ = target_θ + 2π
+#     end
+#     if action_to_rad(action) < 0
+#         target_θ = target_θ - 2π
+#     end
+#     return abs(target_θ - action_to_rad(action)) < beamwidth / 2
+# end
+
+function probability_detection(
+    target::Target, boresight_rad::Number, time::Number, beamwidth::Number
+)
+    θ = atan(target.y, target.x)
+    r = √(target.x^2 + target.y^2)
 
     # Handle beam crossing the π to -π line.
-    if target_θ < 0
-        target_θ = target_θ + 2π
+    if θ < 0
+        θ = θ + 2π
     end
-    if action_to_rad(action) < 0
-        target_θ = target_θ - 2π
+    if boresight_rad < 0
+        θ = θ - 2π
     end
-    return abs(target_θ - action_to_rad(action)) < beamwidth / 2
+
+    signal = 7e20 # solve for 0.5 = 1 - e^{-x * 0.1 / 100000^4}
+
+    if abs(θ - boresight_rad) < beamwidth / 2
+        return 0.50
+        return 1 - ℯ^-(signal * time / r^4)
+    elseif abs(θ - boresight_rad) < beamwidth / 2 * 3
+        return 1 - ℯ^-(signal / 250 * time / r^4) #250 is roughly -24db
+    end
+    return 0.0
 end
 
 function measurement_noise_r(rng, r)
-    # range resolution
-    return r + rand(rng, Normal(0, 5)) * 10
+    # based on noise covariance matrix in BWW (they use (0.1km)^2)
+    return r + rand(rng, Normal(0, 100.0))
 end
 
 function measurement_noise_θ(rng, θ)
-    # should be 1/2 BW / SNR (talk to sunila about vkb)
+    # should be 1/2 BW / SNR (ref vkb)
+    # for now, 0.1 based on noise covariance matrix in BWW
     return θ + rand(rng, Normal(0, 0.1 * 2π / 360))
 end
 
 function measurement_noise_v(rng, v)
     # doppler resolution 
-    return v + rand(rng, Normal(0, 0.5)) * 10
+    # ḋ = Normal(0.0, 6.0) # Some percent of range, really comes from PRF. Let's say PRF of 2khz, 100samples, v/λ, if λ is 50cm, so 6m/s.
+    return v + rand(rng, Normal(0, 6.0))
 end
 
-function target_observation(target, rng)
+function target_observation(rng, target)
     # Sensor is at origin so this is all quite simple
 
     observed_r = measurement_noise_r(rng, √(target.x^2 + target.y^2))
@@ -150,22 +177,25 @@ end
 
 function illumination_observation(pomdp::FlatPOMDP, action::FlatAction, state::FlatState)
 
-    # 1 - e**-SNR
-    # SNR = POWER * t / (BW r**4)
-    # work out the odds that the beam has hit the target
-    # for now, hit = 1
-
     # TODO: rare random detections
 
     observed_targets = filter(
         target ->
             target_visible(target) &&
-                target_in_range(target, pomdp.radar_max_range_meters) &&
-                target_in_beam(target, action, pomdp.beamwidth_rad),
+                target_in_visible_range(
+                    target, pomdp.radar_min_range_meters, pomdp.radar_max_range_meters
+                ) &&
+                # target_in_beam(target, action, pomdp.beamwidth_rad) &&
+                probability_detection(
+                    target,
+                    action_to_rad(action),
+                    pomdp.dwell_time_seconds, #TODO: put time in action
+                    pomdp.beamwidth_rad,
+                ) > rand(pomdp.rng),
         state.targets,
     )
 
-    return [target_observation(t, pomdp.rng) for t in observed_targets]
+    return [target_observation(pomdp.rng, target) for target in observed_targets]
 end
 
 function generate_o(
@@ -182,7 +212,7 @@ end
 # transitions 
 
 function update_target(target::Target, pomdp::FlatPOMDP)
-    if target_in_range(target, pomdp.radar_max_range_meters)
+    if √(target.x^2 + target.y^2) < pomdp.radar_max_range_meters
         return Target(
             target.id,
             target.appears_at_t + pomdp.dwell_time_seconds,
@@ -236,13 +266,17 @@ end
 function POMDPs.reward(pomdp::FlatPOMDP, s::FlatState, b::MultiFilterBelief)
     if isterminal(pomdp, s)
         return 0.0 # Should never happen?
+        # Called as a result of 'empty' belief belief resulting in empty state.
+        # an 'isempty(s)' early return is probably better 
     end
 
     score = 0.0
+    visible_targets = 0 # should be a filter and then 'length'
 
     for target in s.targets
         if target.appears_at_t >= 0 &&
             √(target.x^2 + target.y^2) <= pomdp.radar_max_range_meters
+            visible_targets = visible_targets + 1
             filter_index = findfirst(x -> x.id == target.id, b)
             # change to spread of the particle filter 
             if filter_index === nothing
@@ -252,7 +286,7 @@ function POMDPs.reward(pomdp::FlatPOMDP, s::FlatState, b::MultiFilterBelief)
             end
         end
     end
-    return score / length(s.targets)
+    return score / visible_targets
 end
 
 function score_tracked_target(target, filter)
@@ -271,7 +305,7 @@ function score_tracked_target(target, filter)
             var(x_particles) +
             (target.y - mean(y_particles))^2 +
             var(y_particles)
-        ) / 1e7,
+        ) / 1e8,
     )
 end
 
