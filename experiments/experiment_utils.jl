@@ -15,9 +15,9 @@ run_time = format(now(), "YYYYmmdd-HHMMSS-sss")
 PARAMS = Dict(
     "seed" => 1,
     "render" => true,
-    "animation_steps" => 2000,
+    "animation_steps" => 1000,
     "output_path" => "./out",
-    "number_of_targets" => 3,
+    "number_of_targets" => 1,
     "beamwidth_degrees" => 360 / 30, # 30 slices
     "radar_min_range_meters" => 20_000, # From BWW # blind range is f(pulse duration?) and pulse != dwell.
     "radar_max_range_meters" => 200_000, # From BWW

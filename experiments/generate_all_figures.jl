@@ -24,7 +24,7 @@ function generate_all_figures()
         mkpath(dir_path)
     end
 
-    rng = Xoshiro(0)
+    rng = Xoshiro(1)
 
     child_pomdp = FlatPOMDP(;
         rng=rng,
@@ -49,11 +49,11 @@ function generate_all_figures()
     )
     pomdp = BeliefPOMDP(child_pomdp.rng, child_pomdp, u)
 
-    # solver_single_sweep = SingleSweepSolver()
-    solver_single_sweep = SequentialSolver()
+    solver_single_sweep = SingleSweepSolver()
+    # solver_single_sweep = SequentialSolver()
 
     policy_single_sweep = solve(solver_single_sweep, pomdp)
-    hr = HistoryRecorder(; max_steps=1001)
+    hr = HistoryRecorder(; max_steps=301)
     four_sweeps = [simulate(hr, pomdp, policy_single_sweep) for _ in 1:1]
     plt = plot(;
         xlabel="Step",
@@ -62,15 +62,12 @@ function generate_all_figures()
         # In theory an ieee col is 3.5 inches wide
         size=(3.5 * 72, 2.5 * 72),
         # size=(7 * 72, 5 * 72),
-        # titlefont=("STIXTwoText"),
-        titlefont=("times"),
-        legendfont=("times"),
-        tickfont=("times"),
-        guidefont=("times"),
-        titlefontsize=6,
-        legendfontsize=6,
-        tickfontsize=6,
-        guidefontsize=6,
+        fontfamily="Times New Roman",
+        grid=false,
+        # titlefontsize=6,
+        # legendfontsize=6,
+        # tickfontsize=6,
+        # guidefontsize=6,
     )
     for history in four_sweeps
         rewards = [step.r for step in history]
@@ -81,9 +78,9 @@ function generate_all_figures()
             push!(igain, rewards[i + 1] - rewards[i])
         end
         plot!(plt, accuracy; label="Accuracy")
-        # plot!(plt, igain; label="Information Gain")
+        plot!(plt, igain; label="Information Gain")
         # plot!(plt, igain; label="Information Gain", legend=:inside)
-        plot!(plt, igain; label="Information Gain", legend=:right)
+        # plot!(plt, igain; label="Information Gain", legend=:right)
     end
     fig_path = dir_paths.figure_dir * "single_hit.pdf"
     @info fig_path

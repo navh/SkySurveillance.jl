@@ -136,7 +136,6 @@ function probability_detection(
     signal = 7e20 # solve for 0.5 = 1 - e^{-x * 0.1 / 100000^4}
 
     if abs(θ - boresight_rad) < beamwidth / 2
-        return 0.50
         return 1 - ℯ^-(signal * time / r^4)
     elseif abs(θ - boresight_rad) < beamwidth / 2 * 3
         return 1 - ℯ^-(signal / 250 * time / r^4) #250 is roughly -24db

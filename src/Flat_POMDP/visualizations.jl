@@ -17,6 +17,7 @@ function POMDPTools.render(pomdp::FlatPOMDP, step::NamedTuple)
         pomdp.number_of_targets, [RGB(1, 1, 1), RGB(0, 0, 0)]; dropseed=true
     )
 
+    # Plot particles
     for filter in step.b
         plot!(
             plt,
@@ -85,34 +86,34 @@ function POMDPTools.render(pomdp::FlatPOMDP, step::NamedTuple)
             seriestype=:scatter,
             markershape=:xcross,
             markercolor=:red,
-            markersize=15,
-            markerstrokewidth=3,
+            markersize=25,
+            markerstrokewidth=2,
             markerstrokecolor=:black,
         )
     end
 
     # Add targets
     visible_targets = filter(target -> target.appears_at_t >= 0, step.s.targets)
-    invisible_targets = filter(target -> target.appears_at_t < 0, step.s.targets)
     plot!(
         plt,
         [(target.x, target.y) for target in visible_targets];
-        markercolor=:blue,
+        markercolor=:black,
         markershape=:xcross,
-        markersize=10,
+        markersize=20,
         seriestype=:scatter,
     )
-    plot!(
-        plt,
-        [(target.x, target.y) for target in invisible_targets];
-        markercolor=:gray,
-        markershape=:xcross,
-        markeralpha=[
-            max(0.15, 1 + target.appears_at_t / 8) for target in invisible_targets
-        ],
-        markersize=10,
-        seriestype=:scatter,
-    )
+    # invisible_targets = filter(target -> target.appears_at_t < 0, step.s.targets)
+    # plot!(
+    #     plt,
+    #     [(target.x, target.y) for target in invisible_targets];
+    #     markercolor=:gray,
+    #     markershape=:xcross,
+    #     markeralpha=[
+    #         max(0.15, 1 + target.appears_at_t / 8) for target in invisible_targets
+    #     ],
+    #     markersize=10,
+    #     seriestype=:scatter,
+    # )
 
     return plt
 end

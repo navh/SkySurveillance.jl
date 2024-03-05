@@ -52,12 +52,8 @@ function plot_everything()
         xlabel="Step",
         ylabel="Belief-Reward",
         size=(3.5 * 72, 2.5 * 72),
-        # titlefont=("STIXTwoText"),
-        fontfamily=("Times Roman"),
-        # titlefont=("newtx"),
-        # legendfont=("newtx"),
-        # tickfont=("newtx"),
-        # guidefont=("newtx"),
+        fontfamily="Times New Roman",
+        grid=false,
     )
 
     # for reward in all_random
@@ -69,9 +65,10 @@ function plot_everything()
     # for reward in all_highest_variance
     #     plt = plot!(plt, reward; label="", color=:green, alpha=0.1)
     # end
+    # 
 
-    plt = plot!(plt, mean(all_random); label="Random", color=:black, linestyle=":")
-    plt = plot!(plt, mean(all_sequential); label="Sequential", color=:blue, linestyle="-")
+    plt = plot!(plt, mean(all_random); label="Random", color=:black)
+    plt = plot!(plt, mean(all_sequential); label="Sequential", color=:blue)
     plt = plot!(plt, mean(all_highest_variance); label="ϵ-Greedy", color=:green)
 
     @info "Writing figure"
