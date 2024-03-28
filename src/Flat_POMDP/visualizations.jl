@@ -1,3 +1,5 @@
+DARKMODE = false
+
 function circleShape(h, k, r)
     θ = LinRange(0, 2π, 500)
     return h .+ r * sin.(θ), k .+ r * cos.(θ)
@@ -7,7 +9,9 @@ function POMDPTools.render(pomdp::FlatPOMDP, step::NamedTuple)
     plt = plot(;
         axis=nothing,
         showaxis=false,
+        background_color=DARKMODE ? :black : :white,
         # size=(1920, 1080),
+        # size=(2 * 1920, 2 * 1080),
         size=(600, 600), # Only square resolution known to work with FFMPG
         xlims=(-pomdp.xy_max_meters, pomdp.xy_max_meters),
         ylims=(-pomdp.xy_max_meters, pomdp.xy_max_meters),
@@ -40,7 +44,7 @@ function POMDPTools.render(pomdp::FlatPOMDP, step::NamedTuple)
         ],
     )
     # plot!(plt, beam; fillcolor=:red, linecolor=:white, fillalpha=0.1)
-    plot!(plt, beam; fillcolor=:red, linealpha=0.0, fillalpha=0.1)
+    plot!(plt, beam; fillcolor=DARKMODE ? :lime : :red, linealpha=0.0, fillalpha=0.3)
 
     # Draw -24db side lobes
     left24db = action_to_rad(step.a) - pomdp.beamwidth_rad / 2 * 3
@@ -52,7 +56,7 @@ function POMDPTools.render(pomdp::FlatPOMDP, step::NamedTuple)
             (0.0, 0.0)
         ],
     )
-    plot!(plt, beam; fillcolor=:red, linealpha=0.0, fillalpha=0.1)
+    plot!(plt, beam; fillcolor=DARKMODE ? :lime : :red, linealpha=0.0, fillalpha=0.3)
 
     # Draw visible circle
     plot!(
@@ -61,7 +65,7 @@ function POMDPTools.render(pomdp::FlatPOMDP, step::NamedTuple)
         seriestype=[:shape],
         lw=1,
         color=:black,
-        linecolor=:black,
+        linecolor=DARKMODE ? :black : :black,
         legend=false,
         fillalpha=0.0,
         aspect_ratio=1,
@@ -72,32 +76,18 @@ function POMDPTools.render(pomdp::FlatPOMDP, step::NamedTuple)
         seriestype=[:shape],
         lw=1,
         color=:black,
-        linecolor=:black,
+        linecolor=DARKMODE ? :black : :black,
         legend=false,
         fillalpha=0.0,
         aspect_ratio=1,
     )
-
-    # Plot observations
-    if !isempty(step.o)
-        plot!(
-            plt,
-            [(target.r * cos(target.θ), target.r * sin(target.θ)) for target in step.o];
-            seriestype=:scatter,
-            markershape=:xcross,
-            markercolor=:red,
-            markersize=25,
-            markerstrokewidth=2,
-            markerstrokecolor=:black,
-        )
-    end
 
     # Add targets
     visible_targets = filter(target -> target.appears_at_t >= 0, step.s.targets)
     plot!(
         plt,
         [(target.x, target.y) for target in visible_targets];
-        markercolor=:black,
+        markercolor=DARKMODE ? :white : :black,
         markershape=:xcross,
         markersize=20,
         seriestype=:scatter,
@@ -114,6 +104,20 @@ function POMDPTools.render(pomdp::FlatPOMDP, step::NamedTuple)
     #     markersize=10,
     #     seriestype=:scatter,
     # )
+
+    # Plot observations
+    if !isempty(step.o)
+        plot!(
+            plt,
+            [(target.r * cos(target.θ), target.r * sin(target.θ)) for target in step.o];
+            seriestype=:scatter,
+            markershape=:xcross,
+            markercolor=:red,
+            markersize=25,
+            markerstrokewidth=2,
+            markerstrokecolor=:black,
+        )
+    end
 
     return plt
 end
