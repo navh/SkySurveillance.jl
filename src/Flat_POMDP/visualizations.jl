@@ -17,12 +17,54 @@ function POMDPTools.render(pomdp::FlatPOMDP, step::NamedTuple)
         ylims=(-pomdp.xy_max_meters, pomdp.xy_max_meters),
     )
 
+    # Draw background circle
+    plot!(
+        plt,
+        circleShape(0, 0, pomdp.radar_max_range_meters);
+        seriestype=[:shape],
+        lw=1,
+        color=:black,
+        linecolor=DARKMODE ? :green : :black,
+        fillcolor=DARKMODE ? :grey : :grey,
+        legend=false,
+        fillalpha=1.0,
+        aspect_ratio=1,
+    )
+
     filter_colors = distinguishable_colors(
         pomdp.number_of_targets, [RGB(1, 1, 1), RGB(0, 0, 0)]; dropseed=true
     )
 
+    # plot recency
+    beamwidth_accumulator = -π
+    for recency in step.b.azimuth_recency
+        beam = Shape(
+            [
+                (0.0, 0.0)
+                Plots.partialcircle(
+                    beamwidth_accumulator,
+                    beamwidth_accumulator + pomdp.beamwidth_rad,
+                    100,
+                    pomdp.radar_max_range_meters,
+                )
+                (0.0, 0.0)
+            ],
+        )
+        plot!(
+            plt,
+            beam;
+            fillcolor=DARKMODE ? :green : :white,
+            linealpha=0.0,
+            # linealpha=recency / pomdp.dwell_time_seconds / length(step.s.azimuth_recency),
+            fillalpha=1 - (
+                recency / 2 / pomdp.dwell_time_seconds / length(step.b.azimuth_recency)
+            ),
+        )
+        beamwidth_accumulator = beamwidth_accumulator + pomdp.beamwidth_rad
+    end
+
     # Plot particles
-    for filter in step.b
+    for filter in step.b.filters
         plot!(
             plt,
             [(particle.x, particle.y) for particle in filter.particles];
@@ -65,9 +107,10 @@ function POMDPTools.render(pomdp::FlatPOMDP, step::NamedTuple)
         seriestype=[:shape],
         lw=1,
         color=:black,
-        linecolor=DARKMODE ? :black : :black,
+        linecolor=DARKMODE ? :green : :black,
+        fillcolor=DARKMODE ? :black : :white,
         legend=false,
-        fillalpha=0.0,
+        fillalpha=1.0,
         aspect_ratio=1,
     )
     plot!(
@@ -76,7 +119,7 @@ function POMDPTools.render(pomdp::FlatPOMDP, step::NamedTuple)
         seriestype=[:shape],
         lw=1,
         color=:black,
-        linecolor=DARKMODE ? :black : :black,
+        linecolor=DARKMODE ? :green : :black,
         legend=false,
         fillalpha=0.0,
         aspect_ratio=1,
@@ -92,6 +135,8 @@ function POMDPTools.render(pomdp::FlatPOMDP, step::NamedTuple)
         markersize=20,
         seriestype=:scatter,
     )
+
+    # For debugging only 
     # invisible_targets = filter(target -> target.appears_at_t < 0, step.s.targets)
     # plot!(
     #     plt,

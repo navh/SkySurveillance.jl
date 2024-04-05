@@ -11,11 +11,7 @@ function propagate_particle(rng::AbstractRNG, p::WeightedParticle, time::Number)
 end
 
 function filter_variance(filter::SingleFilter)
-    #TODO: should this be std?
-    #TODO: should this be /2?
-    return (
-        var([particle.x for particle in filter.particles]) + var([particle.y for particle in filter.particles])
-    ) / 2
+    return sum(var([[particle.x, particle.y] for particle in filter.particles]))
 end
 
 function filter_variance_below_max(filter::SingleFilter, max_variance)
@@ -30,7 +26,9 @@ function propagate_filter(rng::AbstractRNG, filter::SingleFilter, time::Number)
 end
 
 function reweight_particle(particle::WeightedParticle, obs_x, obs_y)
-    weight = 1 / √((particle.x - obs_x)^2 + (particle.y - obs_y)^2) # just rms of distance? 
+    # weight = 1 / √((particle.x - obs_x)^2 + (particle.y - obs_y)^2) # just rms of distance? 
+    weight = 1 / ((particle.x - obs_x)^2 + (particle.y - obs_y)^2) # just rms of distance? 
+    # weight = max(0, √((particle.x - obs_x)^2 + (particle.y - obs_y)^2))
     return WeightedParticle(particle.x, particle.y, particle.ẋ, particle.ẏ, weight)
 end
 
@@ -107,19 +105,34 @@ end
     n_particles_per_filter::Number
     max_range::Number
     max_variance::Number
+    recency_bins::Integer
 end
 
-function POMDPs.initialize_belief(_::MultiFilterUpdater, _)
-    return SingleFilter[]
+function POMDPs.initialize_belief(up::MultiFilterUpdater)
+    return POMDPs.initialize_belief(up, nothing)
 end
 
-function POMDPs.update(up::MultiFilterUpdater, belief_old, action, observation)
+function POMDPs.initialize_belief(up::MultiFilterUpdater, _)
+    # I think that I should pass in the state and do a sweep to find all the initial targets
+    initial_filters = SingleFilter[]
+    initial_recency = [0.0 for _ in 1:(up.recency_bins)]
+    return MultiFilterBelief(initial_filters, initial_recency)
+end
+
+function update_filters(
+    up::MultiFilterUpdater,
+    belief_old::MultiFilterBelief,
+    action::FlatAction,
+    observation::FlatObservation,
+)
     # 1) Prediction (or propagation) - each state particle is simulated forward one step in time
 
     # TODO: pack 'time' in with action?
     time = up.dwell_time_seconds
 
-    propagated_belief = [propagate_filter(up.rng, filter, time) for filter in belief_old]
+    propagated_belief = [
+        propagate_filter(up.rng, filter, time) for filter in belief_old.filters
+    ]
 
     # 2) Reweighting - an explicit measurement (observation) model is used to calculate a new weight
     ### 3 cases: observationless filters, observed filters, filterless observations 
@@ -155,5 +168,36 @@ function POMDPs.update(up::MultiFilterUpdater, belief_old, action, observation)
         f -> weighted_centre_of_mass_in_range(f, up.max_range), all_filters
     )
 
-    return filter(f -> filter_variance_below_max(f, up.max_variance), visible_filters) # I think this list of filters is a "MultiFilterBelief"
+    return filter(f -> filter_variance_below_max(f, up.max_variance), visible_filters)
+end
+
+function update_recency(
+    up::MultiFilterUpdater,
+    belief_old::MultiFilterBelief,
+    action::FlatAction,
+    observation::FlatObservation,
+)
+    # This relies on a ∈[0,1]
+    # TODO: dwell_time_seconds into action
+    recency = [t + up.dwell_time_seconds for t in belief_old.azimuth_recency]
+
+    action_recency_index = Integer(
+        min(length(recency), floor((action + 1 / length(recency)) * length(recency)))
+    )
+
+    recency[action_recency_index] = 0.0
+    return recency
+end
+
+# function POMDPs.update(up::MultiFilterUpdater, belief_old, action, observation)
+function POMDPs.update(
+    up::MultiFilterUpdater,
+    belief_old::MultiFilterBelief,
+    action::FlatAction,
+    observation::FlatObservation,
+)
+    return MultiFilterBelief(
+        update_filters(up, belief_old, action, observation),
+        update_recency(up, belief_old, action, observation),
+    )
 end

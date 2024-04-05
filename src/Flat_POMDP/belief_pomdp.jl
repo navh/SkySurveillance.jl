@@ -41,7 +41,7 @@ function POMDPs.initialstate(pomdp::BeliefPOMDP)
             rand(pomdp.rng, POMDPs.initialstate(pomdp.underlying_pomdp)),
             0.0,
             TargetObservation[],
-            SingleFilter[],
+            POMDPs.initialize_belief(pomdp.updater),
         ),
     )
 end

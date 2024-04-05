@@ -81,8 +81,8 @@ function POMDPs.initialstate(pomdp::FlatPOMDP)
     initial_targets = [
         initialize_random_target(pomdp, i) for i in 1:(pomdp.number_of_targets)
     ]
-    initial_state = FlatState(initial_targets)
-    return Deterministic(initial_state)
+
+    return Deterministic(FlatState(initial_targets))
 end
 
 ### actions 
@@ -106,19 +106,6 @@ function target_in_visible_range(target::Target, min_range::Number, max_range::N
     return min_range <= √(target.x^2 + target.y^2) <= max_range
 end
 
-# function target_in_beam(target::Target, action::FlatAction, beamwidth::Number)
-#     target_θ = atan(target.y, target.x)
-#
-#     # Handle beam crossing the π to -π line.
-#     if target_θ < 0
-#         target_θ = target_θ + 2π
-#     end
-#     if action_to_rad(action) < 0
-#         target_θ = target_θ - 2π
-#     end
-#     return abs(target_θ - action_to_rad(action)) < beamwidth / 2
-# end
-
 function probability_detection(
     target::Target, boresight_rad::Number, time::Number, beamwidth::Number
 )
@@ -137,8 +124,11 @@ function probability_detection(
 
     if abs(θ - boresight_rad) < beamwidth / 2
         return 1 - ℯ^-(signal * time / r^4)
+        # pd = 1 - ℯ^-(signal * time / r^4)
+        # @info pd
+        # return pd
     elseif abs(θ - boresight_rad) < beamwidth / 2 * 3
-        return 1 - ℯ^-(signal / 250 * time / r^4) #250 is roughly -24db
+        return 1 - ℯ^-(signal / 256 * time / r^4) #250 is roughly -24db
     end
     return 0.0
 end
@@ -160,18 +150,27 @@ function measurement_noise_v(rng, v)
     return v + rand(rng, Normal(0, 6.0))
 end
 
-function target_observation(rng, target)
+function perfect_target_observation(target)
     # Sensor is at origin so this is all quite simple
 
-    observed_r = measurement_noise_r(rng, √(target.x^2 + target.y^2))
-    observed_θ = measurement_noise_θ(rng, atan(target.y, target.x))
+    observed_r = √(target.x^2 + target.y^2)
+    observed_θ = atan(target.y, target.x)
 
-    # TODO: add diagram to README showing how observed_v math works
     target_local_θ = atan(target.ẏ, target.ẋ)
     target_local_v = √(target.ẋ^2 + target.ẏ^2)
-    observed_v = measurement_noise_v(rng, cos(target_local_θ - observed_θ) * target_local_v)
+    observed_v = cos(target_local_θ - observed_θ) * target_local_v
 
     return TargetObservation(target.id, observed_r, observed_θ, observed_v)
+end
+
+function noisy_target_observation(rng, target)
+    perfect = perfect_target_observation(target)
+    return TargetObservation(
+        perfect.id,
+        measurement_noise_r(rng, perfect.r),
+        measurement_noise_θ(rng, perfect.θ),
+        measurement_noise_v(rng, perfect.v),
+    )
 end
 
 function illumination_observation(pomdp::FlatPOMDP, action::FlatAction, state::FlatState)
@@ -194,7 +193,7 @@ function illumination_observation(pomdp::FlatPOMDP, action::FlatAction, state::F
         state.targets,
     )
 
-    return [target_observation(pomdp.rng, target) for target in observed_targets]
+    return [noisy_target_observation(pomdp.rng, target) for target in observed_targets]
 end
 
 function generate_o(
@@ -211,17 +210,25 @@ end
 # transitions 
 
 function update_target(target::Target, pomdp::FlatPOMDP)
-    if √(target.x^2 + target.y^2) < pomdp.radar_max_range_meters
-        return Target(
-            target.id,
-            target.appears_at_t + pomdp.dwell_time_seconds,
-            target.x + target.ẋ * pomdp.dwell_time_seconds,
-            target.y + target.ẏ * pomdp.dwell_time_seconds,
-            target.ẋ,
-            target.ẏ,
-        )
+    if √(target.x^2 + target.y^2) > pomdp.radar_max_range_meters
+        # If target has flown out of range, initialize a new target
+        return initialize_random_target(pomdp, target.id)
     end
-    return initialize_random_target(pomdp, target.id)
+    return Target(
+        target.id,
+        target.appears_at_t + pomdp.dwell_time_seconds,
+        target.x + target.ẋ * pomdp.dwell_time_seconds,
+        target.y + target.ẏ * pomdp.dwell_time_seconds,
+        target.ẋ,
+        target.ẏ,
+    )
+end
+
+function action_recency_index(a::FlatAction, recency::Array)
+    return nothing
+    return action_recency_index = Integer(
+        min(length(recency), floor((a + 1 / length(recency)) * length(recency)))
+    )
 end
 
 function generate_s(
@@ -234,23 +241,11 @@ function generate_s(
     # new_targets = SVector{pomdp.number_of_targets,Target}([
     #     update_target(target, pomdp) for target in s.targets
     # ])
-    new_targets = [update_target(target, pomdp) for target in s.targets]
-    return FlatState(new_targets)
+    # return FlatState(new_targets)
+    return FlatState([update_target(target, pomdp) for target in s.targets])
 end
 
 ### rewards 
-
-# function POMDPs.reward(pomdp::FlatPOMDP, s::FlatState, a::FlatAction, sp::FlatState)
-#     if isterminal(pomdp, s)
-#         return 0
-#     end
-#
-#     # sum of target reward?
-#     # pomdp.sum_targets_observed
-#     # I really still feel that this should be the reward distance reduction
-#     # why have I done this to myself. why can't I just access b in here.
-#     return 0
-# end
 
 function POMDPs.reward(
     pomdp::FlatPOMDP,
@@ -264,51 +259,54 @@ end
 
 function POMDPs.reward(pomdp::FlatPOMDP, s::FlatState, b::MultiFilterBelief)
     if isterminal(pomdp, s)
-        return 0.0 # Should never happen?
+        return 0.0
+        # Should never happen, does due to ugly inits and use of this in BetaZero action selection
         # Called as a result of 'empty' belief belief resulting in empty state.
         # an 'isempty(s)' early return is probably better 
     end
+    return score_tracking(pomdp, s, b) + score_search(b)
+end
 
+function score_search(belief::MultiFilterBelief)
+    return -sum(recency for recency in belief.azimuth_recency) / 6 # This is really action defined
+end
+
+function score_tracking(pomdp::FlatPOMDP, s::FlatState, b::MultiFilterBelief)
     score = 0.0
-    visible_targets = 0 # should be a filter and then 'length'
-
+    tracked_targets = 0 # should be a filter and then 'length'
     for target in s.targets
         if target.appears_at_t >= 0 &&
             √(target.x^2 + target.y^2) <= pomdp.radar_max_range_meters
-            visible_targets = visible_targets + 1
-            filter_index = findfirst(x -> x.id == target.id, b)
+            filter_index = findfirst(x -> x.id == target.id, b.filters)
             # change to spread of the particle filter 
-            if filter_index === nothing
-                score += score_untracked_target(target)
+            if isnothing(filter_index)
+                # # previously was a penalty, 
+                # there's explicit search reward now, so no need to 'penalize' not spotting something
+                # score += score_untracked_target(target)
             else
-                score += score_tracked_target(target, b[filter_index])
+                tracked_targets = tracked_targets + 1
+                score += score_tracked_target(target, b.filters[filter_index])
             end
         end
     end
-    return score / visible_targets
+    return score / tracked_targets # mean mean squared error 
 end
 
 function score_tracked_target(target, filter)
-    # return min(1.0, 1e7 * pdf(Normal(μ_x, σ_x), target.x) * pdf(Normal(μ_y, σ_y), target.y))
-
-    # return 1 -
-    #        mean([sqrt((target.x - p.x)^2 + (target.y - p.y)^2) for p in filter.particles]) / 2000
-
-    x_particles = [particle.x for particle in filter.particles]
-    y_particles = [particle.y for particle in filter.particles]
-    return max(
-        0,
-        1 -
-        (
-            (target.x - mean(x_particles))^2 +
-            var(x_particles) +
-            (target.y - mean(y_particles))^2 +
-            var(y_particles)
-        ) / 1e8,
-    )
+    belief = [[particle.x, particle.y] for particle in filter.particles]
+    # MSE, so units are all meter^2
+    return max(0, 1 - sum(([target.x, target.y] - mean(belief)) .^ 2 + var(belief)))
 end
 
-function score_untracked_target(target)
-    return 0.0
-    # return -5e8
-end
+# function score_untracked_target(target)
+#     return 0.0
+#     # return -5e8
+# end
+
+# function expected_value(
+#     pomdp::FlatPOMDP, s::FlatState, a::FlatAction, b::MultiFilterBelief, rng::RNG
+# ) where {RNG<:AbstractRNG}
+#     sp = generate_s(pomdp, s, a, rng)
+#
+#     return 3
+# end

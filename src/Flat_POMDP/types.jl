@@ -38,7 +38,11 @@ struct SingleFilter
     particles::Vector{WeightedParticle}
 end
 
-MultiFilterBelief = Array{SingleFilter}
+# MultiFilterBelief = Array{SingleFilter}
+struct MultiFilterBelief
+    filters::Array{SingleFilter}
+    azimuth_recency::Vector{Number}
+end
 
 struct UpdaterState
     underlying_state::FlatState

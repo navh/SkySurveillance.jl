@@ -17,7 +17,7 @@ PARAMS = Dict(
     "render" => true,
     "animation_steps" => 1000,
     "output_path" => "./out",
-    "number_of_targets" => 1,
+    "number_of_targets" => 10,
     "beamwidth_degrees" => 360 / 30, # 30 slices
     "radar_min_range_meters" => 20_000, # From BWW # blind range is f(pulse duration?) and pulse != dwell.
     "radar_max_range_meters" => 200_000, # From BWW
@@ -82,6 +82,7 @@ up = MultiFilterUpdater(
     pomdp.n_particles,
     pomdp.radar_max_range_meters,
     PARAMS["maximum_filter_variance"],
+    2π / pomdp.beamwidth_rad, # this means one slice per beamwidth
 )
 bpomdp = BeliefPOMDP(pomdp.rng, pomdp, up)
 
@@ -121,9 +122,14 @@ function BetaZero.input_representation(belief::Array{SingleFilter})
     )
 end
 
+# I've made this round trip impossible.
+# function rand(rng::AbstractRNG, b::MultiFilterBelief)
+#     s = FlatState([random_target_from_filter(rng, filter) for filter in b])
+# end
+
 function POMDPs.gen(bmdp::BeliefMDP, b::Vector{SingleFilter}, a, rng::AbstractRNG)
-    # s = rand(rng, b) # NOTE: Different than Josh's implementation
-    s = FlatState([random_target_from_filter(rng, filter) for filter in b])
+    s = rand(rng, b) # NOTE: Different than Josh's implementation
+    # s = FlatState([random_target_from_filter(rng, filter) for filter in b])
     # if isterminal(bmdp.pomdp, s)
     #   bp = bmdp_handle_terminal(bmdp.pomdp, bmdp.updater, b, s, a, rng::AbstractRNG)::typeof(b)
     #   return (sp=bp, r=0.0)

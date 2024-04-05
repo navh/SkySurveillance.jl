@@ -60,14 +60,11 @@ function generate_all_figures()
         ylabel="Belief-Reward",
         # There's 72 points in an inch
         # In theory an ieee col is 3.5 inches wide
-        size=(3.5 * 72, 2.5 * 72),
-        # size=(7 * 72, 5 * 72),
+        # size=(3.5 * 72, 2.5 * 72),
+        # for ppt, doubling it feels about right
+        size=(7 * 72, 5 * 72),
         fontfamily="Times New Roman",
         grid=false,
-        # titlefontsize=6,
-        # legendfontsize=6,
-        # tickfontsize=6,
-        # guidefontsize=6,
     )
     for history in four_sweeps
         rewards = [step.r for step in history]

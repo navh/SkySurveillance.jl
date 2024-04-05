@@ -1,7 +1,7 @@
 struct HighestVarianceSolver <: Solver end
 
 function POMDPs.solve(solver::HighestVarianceSolver, pomdp::BeliefPOMDP)
-    return HighestVariancePolicy(pomdp.rng, POMDPs.actions(pomdp), 0.5)
+    return HighestVariancePolicy(pomdp.rng, POMDPs.actions(pomdp), 0.9)
 end
 
 struct HighestVariancePolicy <: Policy
@@ -40,13 +40,14 @@ function POMDPs.action(p::HighestVariancePolicy, b::Deterministic)
 end
 
 function POMDPs.action(p::HighestVariancePolicy, b)
-    if isempty(b) || rand(p.rng) > p.random_action_ratio
+    if isempty(b.filters) || rand(p.rng) > p.random_action_ratio
+        # TODO: should be replaced with some "least recently visited" policy
         return rand(p.rng, p.action_space)
     end
 
     highest_variance = -Inf
     θ = Nothing
-    for filter in b
+    for filter in b.filters
         if filter_variance(filter) > highest_variance
             highest_variance = filter_variance(filter)
 
