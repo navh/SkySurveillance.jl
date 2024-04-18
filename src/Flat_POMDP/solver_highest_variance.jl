@@ -1,7 +1,11 @@
-struct HighestVarianceSolver <: Solver end
+struct HighestVarianceSolver <: Solver
+    random_action_ratio::Number
+end
 
 function POMDPs.solve(solver::HighestVarianceSolver, pomdp::BeliefPOMDP)
-    return HighestVariancePolicy(pomdp.rng, POMDPs.actions(pomdp), 0.9)
+    return HighestVariancePolicy(
+        pomdp.rng, POMDPs.actions(pomdp), solver.random_action_ratio
+    )
 end
 
 struct HighestVariancePolicy <: Policy

@@ -115,7 +115,7 @@ end
 function POMDPs.initialize_belief(up::MultiFilterUpdater, _)
     # I think that I should pass in the state and do a sweep to find all the initial targets
     initial_filters = SingleFilter[]
-    initial_recency = [0.0 for _ in 1:(up.recency_bins)]
+    initial_recency = [12.0 for _ in 1:(up.recency_bins)] # TODO: this should be initialized at some mean steady state value?
     return MultiFilterBelief(initial_filters, initial_recency)
 end
 
@@ -182,7 +182,9 @@ function update_recency(
     recency = [t + up.dwell_time_seconds for t in belief_old.azimuth_recency]
 
     action_recency_index = Integer(
-        min(length(recency), floor((action + 1 / length(recency)) * length(recency)))
+        max(
+            1, min(length(recency), floor((action + 1 / length(recency)) * length(recency)))
+        ),
     )
 
     recency[action_recency_index] = 0.0

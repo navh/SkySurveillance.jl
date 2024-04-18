@@ -124,9 +124,6 @@ function probability_detection(
 
     if abs(θ - boresight_rad) < beamwidth / 2
         return 1 - ℯ^-(signal * time / r^4)
-        # pd = 1 - ℯ^-(signal * time / r^4)
-        # @info pd
-        # return pd
     elseif abs(θ - boresight_rad) < beamwidth / 2 * 3
         return 1 - ℯ^-(signal / 256 * time / r^4) #250 is roughly -24db
     end
@@ -254,7 +251,7 @@ function POMDPs.reward(
     sp::FlatState,
     bp::MultiFilterBelief,
 )
-    return POMDPs.reward(pomdp, sp, bp) - POMDPs.reward(pomdp, s, b)
+    return max(0, POMDPs.reward(pomdp, sp, bp) - POMDPs.reward(pomdp, s, b))
 end
 
 function POMDPs.reward(pomdp::FlatPOMDP, s::FlatState, b::MultiFilterBelief)
@@ -264,11 +261,14 @@ function POMDPs.reward(pomdp::FlatPOMDP, s::FlatState, b::MultiFilterBelief)
         # Called as a result of 'empty' belief belief resulting in empty state.
         # an 'isempty(s)' early return is probably better 
     end
-    return score_tracking(pomdp, s, b) + score_search(b)
+    track_to_search_ratio = 0.8
+
+    return track_to_search_ratio * score_tracking(pomdp, s, b) +
+           (1 - track_to_search_ratio) * score_search(b)
 end
 
 function score_search(belief::MultiFilterBelief)
-    return -sum(recency for recency in belief.azimuth_recency) / 6 # This is really action defined
+    return max(0, 1 - sum(recency for recency in belief.azimuth_recency) / 1e3) # This is really action defined
 end
 
 function score_tracking(pomdp::FlatPOMDP, s::FlatState, b::MultiFilterBelief)
@@ -289,13 +289,17 @@ function score_tracking(pomdp::FlatPOMDP, s::FlatState, b::MultiFilterBelief)
             end
         end
     end
+    if tracked_targets == 0
+        return 0.0
+    end
     return score / tracked_targets # mean mean squared error 
 end
 
 function score_tracked_target(target, filter)
     belief = [[particle.x, particle.y] for particle in filter.particles]
-    # MSE, so units are all meter^2
-    return max(0, 1 - sum(([target.x, target.y] - mean(belief)) .^ 2 + var(belief)))
+    # MSE, so units are all meter^2 
+    # Above is not true, it's now arbitrary again to go to 0 over 100ish steps
+    return max(0, 1 - sum(([target.x, target.y] - mean(belief)) .^ 2 + var(belief)) / 1e8)
 end
 
 # function score_untracked_target(target)
@@ -303,10 +307,19 @@ end
 #     # return -5e8
 # end
 
-# function expected_value(
-#     pomdp::FlatPOMDP, s::FlatState, a::FlatAction, b::MultiFilterBelief, rng::RNG
-# ) where {RNG<:AbstractRNG}
-#     sp = generate_s(pomdp, s, a, rng)
+# function expected_value(pomdp::FlatPOMDP, s::FlatState, b::MultiFilterBelief)
+#     sp = FlatState([update_target(target, pomdp) for target in s.targets])
 #
-#     return 3
+#     # observations happen from state prime 
+#     observed_targets = filter(
+#         target ->
+#             target_visible(target) && target_in_visible_range(
+#                 target, pomdp.radar_min_range_meters, pomdp.radar_max_range_meters
+#             ),
+#         sp.targets,
+#     )
+#
+#     obs = [perfect_target_observation(target) for target in observed_targets]
+#
+#     return 42
 # end

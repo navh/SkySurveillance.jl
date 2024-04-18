@@ -30,7 +30,9 @@ export FlatPOMDP,
     SingleSweepSolver,
     Target,
     FlatState,
-    SingleFilter #just for betazero experiment 
+    SingleFilter, #just for betazero experiment 
+    score_search,
+    score_tracking
 
 include("Flat_POMDP/types.jl")
 include("Flat_POMDP/flat_pomdp.jl")

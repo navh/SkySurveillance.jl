@@ -15,9 +15,10 @@ run_time = format(now(), "YYYYmmdd-HHMMSS-sss")
 PARAMS = Dict(
     "seed" => 1,
     "render" => true,
-    "animation_steps" => 1000,
+    "animation_steps" => 250,
+    # "animation_steps" => 500,
     "output_path" => "./out",
-    "number_of_targets" => 10,
+    "number_of_targets" => 5,
     "beamwidth_degrees" => 360 / 30, # 30 slices
     "radar_min_range_meters" => 20_000, # From BWW # blind range is f(pulse duration?) and pulse != dwell.
     "radar_max_range_meters" => 200_000, # From BWW
@@ -61,9 +62,11 @@ open(dir_paths.output_dir * "params.toml", "w") do io
 end
 
 rng = Xoshiro(PARAMS["seed"])
+# env_rng = Xoshiro(PARAMS["seed"])
 
 pomdp = FlatPOMDP(;
     rng=rng,
+    # env_rng=env_rng,
     discount=PARAMS["discount"],
     number_of_targets=PARAMS["number_of_targets"],
     beamwidth_rad=PARAMS["beamwidth_degrees"] * π / 180,
@@ -74,7 +77,8 @@ pomdp = FlatPOMDP(;
     xy_max_meters=PARAMS["radar_max_range_meters"],
     dwell_time_seconds=PARAMS["dwell_time_seconds"],
     target_velocity_max_meters_per_second=PARAMS["target_velocity_max_meters_per_second"],
-    target_reappearing_distribution=Uniform(-300, 300),
+    # target_reappearing_distribution=Uniform(-300, 300),
+    target_reappearing_distribution=Uniform(-300, 0),
 )
 up = MultiFilterUpdater(
     pomdp.rng,
